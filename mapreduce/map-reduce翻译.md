@@ -9,7 +9,7 @@ Users specify a map function that processes a key/value pair to generate a set o
 and a reduce function that merges all intermediate values associated with the same intermediate key. 
 Many real world tasks are expressible in this model, as shown in the paper.
 #####
-MapReduce是一个关于实施大型数据集处理和生成的程序模型。
+MapReduce是一个关于实施大型数据集处理和生成的编程模型。
 用户指定一个用于处理**k/v对**并生成**中间态k/v对集合**的映射（map）函数，以及一个用于合并所有具有相同中间态key的中间态value值的归约（reduce）函数。
 很多现实世界中的任务都可以通过该模型（MapReduce）表达，后续的论文中将会展示这一点。
 
@@ -64,3 +64,53 @@ and to use re-execution as the primary mechanism for fault tolerance.
 我们意识到我们的绝大多数计算都涉及到为每一个输入的逻辑记录应用(applying)一个map映射操作，目的是对输入集计算从而将其转化为一个中间态的k/v对集合；然后再对所有拥有相同key值的k/v对中的value值应用一个reduce规约操作，目的是恰当地合并衍生数据。 
 通过一个由用户指定具体逻辑的map和reduce操作的函数式模型，使得我们能轻易地并行化大规模的计算，并且将重复执行（自动重试）机制作为容错的主要手段。
 
+#####
+The major contributions of this work are a simple and powerful interface that enables automatic parallelization 
+and distribution of large-scale computations, 
+combined with an implementation of this interface that achieves high performance on large clusters of commodity PCs.
+#####
+这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式执行。
+结合该接口的实现，已实现在大型的商用PC集群中获得高性能。
+
+#####
+Section 2 describes the basic programming model and gives several examples. 
+Section 3 describes an implementation of the MapReduce interface tailored towards our cluster-based computing environment. 
+Section 4 describes several refinements of the programming model that we have found useful. 
+Section 5 has performance measurements of our implementation for a variety of tasks. 
+Section 6 explores the use of MapReduce within Google including our experiences in using it 
+as the basis for a rewrite of our production indexing system. 
+Section 7 discusses related and future work.
+#####
+第二个章节描述了基本的编程模型并且给出了几个示例。
+第三个章节描述了一个针对基于集群计算环境的MapReduce接口实现。
+第四个章节描述了几个我们发现的，关于该编程模型的有效改进。
+第五个章节则是关于我们对各式各样任务所实施的性能测量。
+第六个章节探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建生产环境索引系统的经验。
+第七个章节讨论了一些相关的话题以及日后要做的工作。
+
+### Programming Model（编程模型）
+#####
+The computation takes a set of input key/value pairs, and produces a set of output key/value pairs. 
+The user of the MapReduce library expresses the computation as two functions: Map and Reduce.
+#####
+该计算获得并输入一个k/v键值对集合，然后生成并输出一个k/v键值对集合。
+MapReduce库的用户通过Map和Reduce这两个函数来表达计算逻辑。
+
+#####
+Map, written by the user, takes an input pair and produces a set of intermediate key/value pairs. 
+The MapReduce library groups together all intermediate values associated with the same intermediate key _I_ 
+and passes them to the Reduce function.
+#####
+Map函数是由用户编写的，获得一个输入的k/v对并且生成一个中间态的k/v对。
+MapReduce库对所有的k/v对进行分组，使得所有有着相同中间态key值的k/v对的value值组合在一起，然后将它们传递给Reduce函数。
+
+#####
+The Reduce function, also written by the user, accepts an intermediate key _I_ and a set of values for that key. 
+It merges together these values to form a possibly smaller set of values. 
+Typically just zero or one output value is produced per Reduce invocation. 
+The intermediate values are supplied to the user’s reduce function via an iterator. 
+This allows us to handle lists of values that are too large to fit in memory.
+#####
+Reduce函数也是由用户编写的，其接收一个中间态的key值和与该键对应的一组value值的集合。 它会将这些value值进行统一的合并以形成一个可能更小的value值集合。
+通常，每次reduce调用只会生成零个或一个输出值。这个中间态的value集合通过一个迭代器提供给用户的reduce函数。
+这允许我们得以处理那些无法被完整放入内存的，过大的list集合。

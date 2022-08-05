@@ -179,3 +179,15 @@ Our C++ implementation passes strings to and from the user-defined functions
 and leaves it to the user code to convert between strings and appropriate types.
 #####
 我们在c++实现中传递字符串，作为用户自定义函数的输入和输出，并将其留给用户代码在字符串（类型）与合适的类型间进行转化。
+
+### 2.3 More Examples（更多的例子）
+#####
+Here are a few simple examples of interesting programs that can be easily expressed as MapReduce computations.
+#####
+这里有几个很容易用MapReduce计算来表达的有趣程序的简单示例。
+
+#####
+**Distributed Grep:** The map function emits a line if it matches a supplied pattern. 
+The reduce function is an identity function that just copies the supplied intermediate data to the output.
+#####
+**分布式Grep:** 

@@ -88,7 +88,7 @@ Section 7 discusses related and future work.
 第六个章节探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建生产环境索引系统的经验。
 第七个章节讨论了一些相关的话题以及日后要做的工作。
 
-### Programming Model（编程模型）
+### 2 Programming Model（编程模型）
 #####
 The computation takes a set of input key/value pairs, and produces a set of output key/value pairs. 
 The user of the MapReduce library expresses the computation as two functions: Map and Reduce.
@@ -114,3 +114,68 @@ This allows us to handle lists of values that are too large to fit in memory.
 Reduce函数也是由用户编写的，其接收一个中间态的key值和与该键对应的一组value值的集合。 它会将这些value值进行统一的合并以形成一个可能更小的value值集合。
 通常，每次reduce调用只会生成零个或一个输出值。这个中间态的value集合通过一个迭代器提供给用户的reduce函数。
 这允许我们得以处理那些无法被完整放入内存的，过大的list集合。
+
+###2.1 Example（示例）
+#####
+Consider the problem of counting the number of occurrences of each word in a large collection of documents. 
+The user would write code similar to the following pseudo-code:
+#####
+思考一个关于再一个大型文档集合中计算每一个单词出现次数的程序。
+用户将写下形如以下伪代码的代码：
+```
+map(String key, String value):
+    // key: document name
+    // value: document contents
+    for each word w in value:
+        EmitIntermediate(w,"1");
+reduce(String key, Iterator values):
+    // key: a word
+    // values: a list of counts
+    int result = 0;
+    for each v in values:
+        result += ParseInt(v);
+    Emit(AsString(result));
+```
+
+#####
+The map function emits each word plus an associated count of occurrences (just ‘1’ in this simple example).
+The reduce function sums together all counts emitted for a particular word.
+#####
+这个map映射函数发出每一个单词，并附加上其出现的次数（在这个简单的例子中恰好是1）。
+这个reduce规约函数则累加统计每一个发出的特定单词所有的出现计数。
+
+#####
+In addition, the user writes code to fill in a mapreduce specification object with the names of the input and output files, and optional tuning parameters. 
+The user then invokes the MapReduce function, passing it the specification object. 
+The user’s code is linked together with the MapReduce library (implemented in C++). 
+Appendix A contains the full program text for this example.
+#####
+此外，用户编写代码以指定的输入、输出文件的名字和可选的调优参数来填充一个规范的mapreduce对象。
+用户然后调用MapReduce函数，传递这个符合规范的对象。
+用户的代码与MapReduce库（c++实现）进行链接。
+附录A包含了本示例的完整程序文本。
+
+###2.2 Types（类型）
+#####
+Even though the previous pseudo-code is written in terms of string inputs and outputs, 
+conceptually the map and reduce functions supplied by the user have associated types:
+#####
+尽管前面的伪代码是依据字符串类型的输入、输出编写的，
+从概念上说，用户提供的map和reduce函数在类型上是有关联的：
+```
+map (k1,v1) --> list(k2,v2)
+reduce (k2,list(v2)) --> list (v2)
+```
+
+#####
+I.e., the input keys and values are drawn from a different domain than the output keys and values. 
+Furthermore, the intermediate keys and values are from the same domain as the output keys and values.
+#####
+举个例子，输入的key和value和输出的key和value取自不同的域。
+此外，中间态的key和value和输出的key和value则来自相同的域。
+
+#####
+Our C++ implementation passes strings to and from the user-defined functions 
+and leaves it to the user code to convert between strings and appropriate types.
+#####
+我们在c++实现中传递字符串，作为用户自定义函数的输入和输出，并将其留给用户代码在字符串（类型）与合适的类型间进行转化。

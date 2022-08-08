@@ -190,4 +190,88 @@ Here are a few simple examples of interesting programs that can be easily expres
 **Distributed Grep:** The map function emits a line if it matches a supplied pattern. 
 The reduce function is an identity function that just copies the supplied intermediate data to the output.
 #####
-**分布式Grep:** 
+**分布式Grep:**  
+map函数输出匹配某个给定规则的一行。  
+reduce函数是一个恒等函数，其只是将所输入的中间数据复制到输出（恒等函数：f(x) = x, 即输入=输出）。
+
+#####
+**Count of URL Access Frequency:** The map function processes logs of web page requests and outputs <URL,1>.
+The reduce function adds together all values for the same URL and emits a <URL,total count> pair.
+#####
+**URL访问频率计数:**  
+map函数处理网页请求的处理日志，并且输出<URL,1（访问数为1）>的键值对。  
+reduce函数累加所有具有相同URL键值对的value值，并且输出一个<URL,总访问数>的键值对。
+
+#####
+**Reverse Web-Link Graph:** The map function outputs (target,source) pairs for each link to a target URL found in a page named source. 
+The reduce function concatenates the list of all source URLs associated with a given target URL and emits the pair:(target,_list_(source))
+#####
+**反向网络链接图:**   
+map函数从每一个源页面（source）中找出每一个目标页URL（target）的链接，输出（target，source）格式的kv对。  
+reduce函数将所有具有相同target目标页的所有源页面（source）连接在一起组成一个列表，输出这样一个kv对（target,_list_(source)）。
+
+#####
+**Term-Vector per Host:** A term vector summarizes the most important words that occur in a document 
+or a set of documents as a list of <word,frequency> pairs. 
+The map function emits a <hostname,>pair for each input document (where the hostname is extracted from the URL of the document).
+The reduce function is passed all per-document term vectors for a given host. 
+It adds these term vectors together, throwing away infrequent terms, and then emits a final<hostname,term vector> pair.
+#####
+**每台主机的检索词向量**:  
+汇总从一个或一系列文档中出现的最重要单词作为检索词向量（term-vector），生成以<word(单词),frequency(出现频次)>格式的kv对列表。  
+map函数针对每一个输入的文档，输出一个<hostname(主机名),term vector(检索词向量)>的kv对（主机名是从文档的URL中提取出来的）。  
+reduce函数接收一个给定host下所有的、基于每个文档的term-vectors(检索词向量)。将这些检索词向量进行累加，抛弃掉一些出现频率较低的检索词项，
+然后返回最终的<hostname(主机名),term vector(检索词向量)>的kv对。
+
+#####
+**Inverted Index:** The map function parses each document, and emits a sequence of <word,document ID>pairs. 
+The reduce function accepts all pairs for a given word, sorts the corresponding document IDs and emits a <word,_list_(document ID)> pair. 
+The set of all output pairs forms a simple inverted index. 
+It is easy to augment this computation to keep track of word positions.
+#####
+**倒排索引:**  
+map函数解析每一个文档，然后输出一连串<word(单词)，documentID(文档ID)>格式的kv对。  
+reduce函数接收一个给定单词对应的所有kv对，针对文档ID进行排序然后返回一个<word(单词),_list_documentID(文档ID列表)>格式的kv对。  
+所有输出的kv对集合构成了一个简单的倒排索引。基于此，我们能简单的增加这种计算来追踪每一个单词(在这些文档中)的位置。
+
+#####
+Distributed Sort: The map function extracts the key from each record, and emits a <key,record> pair. 
+The reduce function emits all pairs unchanged. 
+This computation depends on the partitioning facilities described in Section 4.1 and the ordering properties described in Section 4.2.
+#####
+**分布式排序:**
+map函数提取每一个记录中的key值，然后返回一个<key,record>格式的kv对。
+reduce函数对所有的kv对不做修改直接返回。  
+该计算依赖于后续4.1章节中所述的分区机制和4.2章节中所述的排序属性。
+
+### 3 Implementation(实现)
+#####
+Many different implementations of the MapReduce interface are possible. 
+The right choice depends on the environment. 
+For example, one implementation may be suitable for a small shared-memory machine, 
+another for a large NUMA multi-processor, and yet another for an even larger collection of networked machines.
+#####
+MapReduce接口可以有很多种不同的实现方式。如何进行正确的选择取决于环境。  
+举个例子，某一种实现方式可能适合拥有较小共享内存的机器，而另一种实现方式则适用于大型的NUMA架构的多核处理器机器，还有的实现方式则更适用于基于网络的大型机器集群。
+
+#####
+This section describes an implementation targeted to the computing environment in wide use at Google:
+large clusters of commodity PCs connected together with switched Ethernet.
+In our environment:
+(1) Machines are typically dual-processor x86 processors running Linux, with 2-4 GB of memory per machine.
+(2) Commodity networking hardware is used – typically either 100 megabits/second or 1 gigabit/second at the machine level, 
+but averaging considerably less in over-all bisection bandwidth.
+(3) A cluster consists of hundreds or thousands of machines, and therefore machine failures are common.
+(4) Storage is provided by inexpensive IDE disks attached directly to individual machines. 
+A distributed file system developed in-house is used to manage the data stored on these disks. 
+The file system uses replication to provide availability and reliability on top of unreliable hardware.
+(5) Users submit jobs to a scheduling system. Each job consists of a set of tasks,
+and is mapped by the scheduler to a set of available machines within a cluster.
+#####
+本章介绍一个针对谷歌内部广泛使用的计算环境下的(MapReduce)实现：通过交换式以太网互相连接起来的大型商用PC集群。  
+在我们的环境中:  
+(1) 机器通常是运行linux操作系统的、x86架构的双处理器的平台，每台机器有2-4GB的内存。  
+(2) 使用商用的网络硬件 - 通常每台机器的带宽为100M/s或者1GB/s，但其平均(实际使用的)带宽远小于整个网络带宽的一半。  
+(3) 一个集群由几百或几千的机器组成，因此机器故障是常见的。  
+
+

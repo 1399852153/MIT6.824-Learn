@@ -273,5 +273,54 @@ and is mapped by the scheduler to a set of available machines within a cluster.
 (1) 机器通常是运行linux操作系统的、x86架构的双处理器的平台，每台机器有2-4GB的内存。  
 (2) 使用商用的网络硬件 - 通常每台机器的带宽为100M/s或者1GB/s，但其平均(实际使用的)带宽远小于整个网络带宽的一半。  
 (3) 一个集群由几百或几千的机器组成，因此机器故障是常见的。  
+(4) 存储是由直接连接到独立机器上的IDE硬盘提供的。存储在这些磁盘上的数据由一个内部自研的分布式文件系统来管理。
+这一文件系统采用复制机制，在不可靠的硬件之上实现可用性和可靠性。
+(5) 用户提交作业(job)给一个调度系统。每一个作业都由一系列的任务(task)组成，且任务由调度器映射(调度)到内部集群中的一组可用机器上执行。
 
+### 3.1 Execution Overview(执行概述)
+#####
+The Map invocations are distributed across multiple machines by automatically partitioning the input data into a set of M splits. 
+The input splits can be processed in parallel by different machines. 
+Reduce invocations are distributed by partitioning the intermediate key space into R pieces using a partitioning function (e.g., hash(key) mod R). 
+The number of partitions (R) and the partitioning function are specified by the user.
+#####
+通过将输入的数据自动分割为M份，map调用得以分布在多个机器上调用执行。  
+拆分后的输入数据可以被不同的机器并行的处理。  
+通过一个分区函数将中间态的key值空间划分为R份(例如: hash(key) mod R, 对key做hash后再对R求模)，Reduce调用也得以分布式的执行。  
+划分的个数(R)和分区函数都由用户来指定。
 
+![执行概述.png](Execution_Overview.png)
+
+#####
+Figure 1 shows the overall flow of a MapReduce operation in our implementation. 
+When the user program calls the MapReduce function, the following sequence of actions occurs 
+(the numbered labels in Figure 1 correspond to the numbers in the list below):
+#####
+图1展示了我们所实现的MapReduce操作中的总体流程。  
+当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是一一对应的）
+
+#####
+1. The MapReduce library in the user program first splits the input files into M pieces of typically 16 megabytes to 64 megabytes (MB) per piece
+(controllable by the user via an optional parameter). 
+It then starts up many copies of the program on a cluster of machines.
+#####
+1. 内嵌于用户程序中的MapReduce库首先将输入的文件拆分为M份，每份通常为16MB至64MB大小（具体的大小可以由用户通过可选参数来控制）。  
+然后，便在集群的一组机器上启动多个程序的副本。
+
+#####
+2. One of the copies of the program is special – the master. The rest are workers that are assigned work by the master.
+There are M map tasks and R reduce tasks to assign. The master picks idle workers and assigns each one a map task or a reduce task.
+#####
+2.
+其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。  
+这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。
+
+#####
+3.
+A worker who is assigned a map task reads the contents of the corresponding input split. 
+It parses key/value pairs out of the input data and passes each pair to the user-defined Map function. 
+The intermediate key/value pairs produced by the Map function are buffered in memory.
+#####
+一个被分配了map任务的worker，读取被拆分后的对应输入内容。  
+从输入的数据中解析出key/value键值对，并将每一个kv作为参数传递给用户自定义的map函数。
+map函数会产生中间态的key/value键值对，并被缓存在内存之中。

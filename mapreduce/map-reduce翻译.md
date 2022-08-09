@@ -385,7 +385,7 @@ the library must tolerate machine failures gracefully.
 #####
 由于MapReduce库是被设计用于在几百或几千台机器上进行大规模数据处理的，所以该库必须能优雅地处理机器故障。
 
-##### Worker Failure
+##### Worker Failure(Worker故障)
 #####
 The master pings every worker periodically.
 If no response is received from a worker in a certain amount of time, the master marks the worker as failed.
@@ -393,3 +393,66 @@ Any map tasks completed by the worker are reset back to their initial idle state
 and therefore become eligible for scheduling on other workers.
 Similarly, any map task or reduce task in progress on a failed worker is also reset to idle and becomes eligible for rescheduling.
 #####
+master会周期性的ping每一个worker。
+如果在一定的时间内没有接收到来自某一worker的响应，master将会将worker标记为有故障(failed)。  
+所有由该worker完成的map任务将会被重置回初始状态，因此这些map任务能被其它worker去调度执行。
+类似的，任何在这个有故障的worker上处理中的map或reduce任务状态也将被重置为初始化，并且(这些被重置的任务)能够被重新调度执行。
+
+#####
+Completed map tasks are re-executed on a failure because their output is stored on the local disk(s) of the failed machine and is therefore inaccessible. 
+Completed reduce tasks do not need to be re-executed since their output is stored in a global file system.
+#####
+已完成的map任务在故障时需要被重复执行的原因在于map任务的输出是被存储在故障机器的本地磁盘上的，因此无法被访问到(宕机或者网络不通等情况)。  
+而已完成的reduce任务不需要重复执行的原因在于其输出是被存储在全局的文件系统中的。
+
+#####
+When a map task is executed first by worker A and then later executed by worker B (because A failed), all workers executing reduce tasks are notified of the re-execution. 
+Any reduce task that has not already read the data from worker A will read the data from worker B.
+#####
+当一个map任务在worker A上被首次执行，不久后又被worker B执行(因为worker A发生了故障)，所有执行reduce任务的worker将会被通知需要重新执行。
+所有还没有从worker A处读取(完整)数据的reduce任务将改为从worker B处读取数据。
+
+#####
+MapReduce is resilient to large-scale worker failures.
+For example, during one MapReduce operation, network maintenance on a running cluster was causing groups of 80 machines at a time to become unreachable for several minutes. 
+The MapReduce master simply re-executed the work done by the unreachable worker machines, and continued to make forward progress,eventually completing the MapReduce operation.
+#####
+MapReduce能从大范围的worker故障中迅速的恢复。
+例如，在一个MapReduce操作运行期间内，一个正在运行的集群上的一次网络维护导致了80台机器在几分钟内无法访问的。  
+MapReduce的master只需要将这些无法访问的机器上的任务重新的执行，然后继续向前推进，最终完成这个MapReduce操作。
+
+##### Master Failure(Master故障)
+#####
+It is easy to make the master write periodic checkpoints of the master data structures described above. 
+If the master task dies, a new copy can be started from the last checkpointed state. 
+However, given that there is only a single master, its failure is unlikely; 
+therefore our current implementation aborts the MapReduce computation if the master fails. 
+Clients can check for this condition and retry the MapReduce operation if they desire.
+#####
+可以很简单的让master周期性的将上述的master数据结构以检查点的形式持久化。  
+如果master任务宕机了，一个新的master备份机器将会从最新的检查点状态处启动。  
+然而，考虑到只有一台master机器，是不太可能出现故障的；因此如果master故障了，我们当前的实现会中止MapReduce计算。
+客户端可以检查master的这些状态，并根据需要重试MapReduce操作。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

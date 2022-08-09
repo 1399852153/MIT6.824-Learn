@@ -61,7 +61,8 @@ and to use re-execution as the primary mechanism for fault tolerance.
 #####
 为了应对这些复杂性，我们设计了一个全新的抽象，该抽象允许我们表达我们想要执行的简单计算，但是将关于并行化、容错、数据分发和负载均衡等机制中复杂、繁琐的细节隐藏在了库中。
 我们的这一抽象其设计灵感是来源于Lisp和很多其它函数式语言中的map和reduce原语。
-我们意识到我们的绝大多数计算都涉及到为每一个输入的逻辑记录应用(applying)一个map映射操作，目的是对输入集计算从而将其转化为一个中间态的k/v对集合；然后再对所有拥有相同key值的k/v对中的value值应用一个reduce规约操作，目的是恰当地合并衍生数据。 
+我们意识到我们的绝大多数计算都涉及到为每一个输入的逻辑记录应用(applying)一个map映射操作，目的是对输入集计算从而将其转化为一个中间态的k/v对集合；
+然后为了恰当地合并衍生数据，再对所有拥有相同key值的k/v对中的value值应用一个reduce规约操作。 
 通过一个由用户指定具体逻辑的map和reduce操作的函数式模型，使得我们能轻易地并行化大规模的计算，并且将重复执行（自动重试）机制作为容错的主要手段。
 
 #####
@@ -69,8 +70,8 @@ The major contributions of this work are a simple and powerful interface that en
 and distribution of large-scale computations, 
 combined with an implementation of this interface that achieves high performance on large clusters of commodity PCs.
 #####
-这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式执行。
-结合该接口的实现，已实现在大型的商用PC集群中获得高性能。
+这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式的执行。
+结合该接口的实现，从而在大型的商用PC集群中获得高性能。
 
 #####
 Section 2 describes the basic programming model and gives several examples. 
@@ -81,12 +82,12 @@ Section 6 explores the use of MapReduce within Google including our experiences 
 as the basis for a rewrite of our production indexing system. 
 Section 7 discusses related and future work.
 #####
-第二个章节描述了基本的编程模型并且给出了几个示例。
-第三个章节描述了一个针对基于集群计算环境的MapReduce接口实现。
-第四个章节描述了几个我们发现的，关于该编程模型的有效改进。
-第五个章节则是关于我们对各式各样任务所实施的性能测量。
-第六个章节探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建生产环境索引系统的经验。
-第七个章节讨论了一些相关的话题以及日后要做的工作。
+第二章介绍了基本的编程模型并给出了几个示例。
+第三章介绍了一个针对集群计算环境的MapReduce接口实现。
+第四章介绍了几个我们发现的，关于该编程模型的有效改进。
+第五章则是关于我们对各式各样任务所实施的性能测量。
+第六章探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建生产环境索引系统的经验。
+第七章讨论了一些相关的话题以及日后要做的工作。
 
 ### 2 Programming Model（编程模型）
 #####

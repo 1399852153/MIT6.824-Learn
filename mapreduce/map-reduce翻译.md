@@ -295,32 +295,101 @@ The number of partitions (R) and the partitioning function are specified by the 
 Figure 1 shows the overall flow of a MapReduce operation in our implementation. 
 When the user program calls the MapReduce function, the following sequence of actions occurs 
 (the numbered labels in Figure 1 correspond to the numbers in the list below):
-#####
-图1展示了我们所实现的MapReduce操作中的总体流程。  
-当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是一一对应的）
 
-#####
 1. The MapReduce library in the user program first splits the input files into M pieces of typically 16 megabytes to 64 megabytes (MB) per piece
-(controllable by the user via an optional parameter). 
-It then starts up many copies of the program on a cluster of machines.
-#####
-1. 内嵌于用户程序中的MapReduce库首先将输入的文件拆分为M份，每份通常为16MB至64MB大小（具体的大小可以由用户通过可选参数来控制）。  
-然后，便在集群的一组机器上启动多个程序的副本。
+   (controllable by the user via an optional parameter).
+   It then starts up many copies of the program on a cluster of machines.
 
-#####
 2. One of the copies of the program is special – the master. The rest are workers that are assigned work by the master.
-There are M map tasks and R reduce tasks to assign. The master picks idle workers and assigns each one a map task or a reduce task.
+   There are M map tasks and R reduce tasks to assign. The master picks idle workers and assigns each one a map task or a reduce task.
+
+3. A worker who is assigned a map task reads the contents of the corresponding input split.
+   It parses key/value pairs out of the input data and passes each pair to the user-defined Map function.
+   The intermediate key/value pairs produced by the Map function are buffered in memory.
+
+4. Periodically, the buffered pairs are written to local disk, partitioned into R regions by the partitioning function.
+   The locations of these buffered pairs on the local disk are passed back to the master,
+   who is responsible for forwarding these locations to the reduce workers.
+
+5. When a reduce worker is notified by the master about these locations,
+   it uses remote procedure calls to read the buffered data from the local disks of the map workers.
+   When a reduce worker has read all intermediate data, it sorts it by the intermediate keys so
+   that all occurrences of the same key are grouped together.
+   The sorting is needed because typically many different keys map to the same reduce task.
+   If the amount of intermediate data is too large to fit in memory, an external sort is used.
+
+6. The reduce worker iterates over the sorted intermediate data and for each unique intermediate key encountered,
+   it passes the key and the corresponding set of intermediate values to the user’s Reduce function.
+   The output of the Reduce function is appended to a final output file for this reduce partition.
+
+7. When all map tasks and reduce tasks have been completed, the master wakes up the user program.
+   At this point, the MapReduce call in the user program returns back to the user code.
 #####
-2.
-其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。  
-这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。
+图1展示了我们所实现的MapReduce操作中的总体流程。当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是一一对应的）:
+
+1. 内嵌于用户程序中的MapReduce库首先会将输入的文件拆分为M份，每份大小通常为16MB至64MB（具体的大小可以由用户通过可选参数来控制）。
+   随后便在集群中的一组机器上启动多个程序的副本。
+
+2. 其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。
+   这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。
+
+3. 一个被分配了map任务的worker，读取被拆分后的对应输入内容。
+   从输入的数据中解析出key/value键值对，并将每一个kv作为参数传递给用户自定义的map函数。 
+   map函数会产生中间态的key/value键值对，并被缓存在内存之中。
+
+4. 每隔一段时间，缓存在内存中的kv对会被写入本地磁盘，并被分区函数划分为R个区域。
+   这些在本地磁盘上被缓冲的kv对的位置将会被回传给master，master负责将这些位置信息转发给后续执行reduce任务的worker。
+
+5. 当一个负责reduce任务的worker被master通知了这些位置信息(map任务生成的中间态kv对数据所在的磁盘信息)， 
+   该worker通过远过程调用(RPC)从负责map任务的worker机器的本地磁盘中读取被缓存的数据。
+   当一个负责reduce任务的worker已经读取了所有的中间态数据，将根据中间态kv对的key值进行排序，因此所有拥有相同key值的kv对将会被分组在一起。
+   需要排序的原因是因为通常很多不同的key(的kv对集合)会被映射到同一个reduce任务中去。如果(需要排序的)中间态的数据量过大，无法完全装进内存时，将会使用外排序。
+   
+6. 负责reduce任务的worker迭代所有被排好序的中间态数据，并将所遇到的每一个唯一的key值和其对应的中间态value值集合传递给用户自定义的reduce函数。
+   reduce函数所产生的输出将会追加在一个该reduce分区内的、最终的输出文件内。
+
+7. 当所有的map任务和reduce任务都完成后，master将唤醒用户程序。此时，调用MapReduce的用户程序(的执行流)将会返回到用户代码中。
 
 #####
-3.
-A worker who is assigned a map task reads the contents of the corresponding input split. 
-It parses key/value pairs out of the input data and passes each pair to the user-defined Map function. 
-The intermediate key/value pairs produced by the Map function are buffered in memory.
+After successful completion, the output of the mapreduce execution is available in the R output files 
+(one per reduce task, with file names as specified by the user).
+Typically, users do not need to combine these R output files into one file – they often pass these files as input to another MapReduce call, 
+or use them from another distributed application that is able to deal with input that is partitioned into multiple files.
 #####
-一个被分配了map任务的worker，读取被拆分后的对应输入内容。  
-从输入的数据中解析出key/value键值对，并将每一个kv作为参数传递给用户自定义的map函数。
-map函数会产生中间态的key/value键值对，并被缓存在内存之中。
+在成功的完成后，MapReduce执行的输出结果将被存放在R个输出文件中(每一个reduce任务都对应一个输出文件，输出文件的名字由用户指定)。  
+通常，用户无需将这R个输出文件合并为一个文件 - 他们通常传递这些文件，将其作为另一个MapReduce调用的输入，  
+或者由另一个能处理多个被分割的输入文件的分布式应用使用。
+
+### 3.2 Master Data Structures(Master数据结构)
+#####
+The master keeps several data structures. For each map task and reduce task, it stores the state (idle, in-progress, or completed), 
+and the identity of the worker machine(for non-idle tasks).
+#####
+master中维护了一些数据结构。对于每一个map和reduce任务，master存储了对应的任务状态(闲置的，运行中，或者已完成)，以及worker机器的id(针对非空闲的任务)。
+
+#####
+The master is the conduit through which the location of intermediate file regions is propagated from map tasks to reduce tasks. 
+Therefore, for each completed map task, the master stores the locations and sizes of the R intermediate file regions produced by the map task. 
+Updates to this location and size information are received as map tasks are completed. 
+The information is pushed incrementally to workers that have in-progress reduce tasks.
+#####
+master是一个管道，将中间态文件的位置信息从map任务传递给reduce任务。  
+因此，对于每个已完成的map任务，master存储了由map任务生成的R个中间态文件区域的位置和大小。  
+当map任务完成时，master将更新接受到的(中间态文件区域)位置和大小信息。
+这些信息的变更会以增量的方式推送给运行中的reduce任务。
+
+### 3.3 Fault Tolerance(容错)
+#####
+Since the MapReduce library is designed to help process very large amounts of data using hundreds or thousands of machines, 
+the library must tolerate machine failures gracefully.
+#####
+由于MapReduce库是被设计用于在几百或几千台机器上进行大规模数据处理的，所以该库必须能优雅地处理机器故障。
+
+##### Worker Failure
+#####
+The master pings every worker periodically.
+If no response is received from a worker in a certain amount of time, the master marks the worker as failed.
+Any map tasks completed by the worker are reset back to their initial idle state,
+and therefore become eligible for scheduling on other workers.
+Similarly, any map task or reduce task in progress on a failed worker is also reset to idle and becomes eligible for rescheduling.
+#####

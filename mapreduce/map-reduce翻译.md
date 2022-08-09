@@ -430,7 +430,7 @@ therefore our current implementation aborts the MapReduce computation if the mas
 Clients can check for this condition and retry the MapReduce operation if they desire.
 #####
 可以很简单的让master周期性的将上述的master数据结构以检查点的形式持久化。  
-如果master任务宕机了，一个新的master备份机器将会从最新的检查点状态处启动。  
+如果master任务机器宕机了，一个新的master备份机器将会从最新的检查点状态处启动。  
 然而，考虑到只有一台master机器，是不太可能出现故障的；因此如果master故障了，我们当前的实现会中止MapReduce计算。
 客户端可以检查master的这些状态，并根据需要重试MapReduce操作。
 

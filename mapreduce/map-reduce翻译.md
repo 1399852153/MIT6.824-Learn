@@ -474,25 +474,60 @@ and the fact that our semantics are equivalent to a sequential execution in this
 it very easy for programmers to reason about their program’s behavior.
 When the map and/or reduce operators are non-deterministic, we provide weaker but still reasonable semantics. 
 
-In the presence of non-deterministic operators, the output of a particular reduce task R 1 is equivalent to the output 
-for R 1 produced by a sequential execution of the non-deterministic program. 
-However, the output for a different reduce task R 2 may correspond to the output for R 2 produced 
+In the presence of non-deterministic operators, the output of a particular reduce task R1 is equivalent to the output 
+for R1 produced by a sequential execution of the non-deterministic program. 
+However, the output for a different reduce task R2 may correspond to the output for R2 produced 
 by a different sequential execution of the non-deterministic program.
 #####
-我们绝大多数的map和reduce算子都是确定性的(即：输出完全由输入决定，同样地输入有着同样地输出)，
-在这种情况下我们(分布式架构下并行执行)的语义等价于(单机)顺序串行执行，这一事实使得程序员很容易理解他们程序的行为。
+我们绝大多数的map和reduce算子都是确定性的(即：输出完全由输入决定，同样地输入一定有着同样地输出)，
+在这种情况下我们(分布式架构下并行执行)的语义等价于(单机单线程)顺序串行执行，这一事实使得程序员很容易理解他们程序的行为。
 当map或reduce算子是非确定性的，我们提供了一个稍弱但依然合理的语义。  
-存在非确定性算子的情况下，一个特定reduce任务R1的输出等同于R1在非确定性程序下(单机)顺序串行执行的输出。  
-然而，另一个与R1不同的reduce任务R2的输出将会对应于R2在非确定程序中以一个不同的顺序串行执行的输出。
+存在非确定性算子的情况下，一个特定reduce任务R1的输出等同于R1在非确定性程序下(单机单线程)顺序串行执行的输出。  
+然而，另一个与R1不同的reduce任务R2的输出将会对应于R2在一个不同的非确定程序中以顺序串行执行的输出。
 
 #####
-Consider map task M and reduce tasks R 1 and R 2 . 
-Let e(R i ) be the execution of R i that committed (there is exactly one such execution). 
-The weaker semantics arise because e(R 1 ) may have read the output produced by one execution of M 
-and e(R 2 ) may have read the output produced by a different execution of M.
+Consider map task M and reduce tasks R1 and R2 . 
+Let e(Ri) be the execution of Ri that committed (there is exactly one such execution). 
+The weaker semantics arise because e(R1) may have read the output produced by one execution of M 
+and e(R2) may have read the output produced by a different execution of M.
 #####
-考虑下目前有一个map任务M和两个reduce任务R1和R2。
+考虑下目前有一个map任务M和两个reduce任务R1和R2。 
+假设e(Ri)代表Ri任务已经被提交的一次执行(恰好只执行一次)。
+由于e(R1)可能在一次执行中读取M任务产生的输出，同时e(R2)可能会在另一次执行中读取M任务产生的输出，此时将会出现弱语义。
 
+##### 
+(译者小熊餐馆注：
+上面这段内容比较晦涩，这里根据我举个简单的例子来帮助大家理解。  
+假设有一段话：“Your name is Tom? My name is Tom, too.”，原始需求是想利用MapReduce计算统计分词后每个单词出现的次数(例子里句子很短是为了描述，实际上可以是海量的文档)。  
+我们自定义的Map函数是确定性的函数算子，输入这个字符串进行Map操作后总是会返回以下9个kv对(key是单词，value是出现的次数): <Your,1>, <name,1>, <is,1>, <Tom,1>, <My,1>, <name,1>, <is,1>, <Tom,1>, <too,1>。
+无论Map函数是单机单线程顺序执行，还是在集群中并行的执行，结果都是明确不变的，也就是上述的强语义的概念。  
+MapReduce库会把Key相同的kv对进行分组，并将其传递给我们自定义的reduce函数，下面是分组后会传给reduce函数算子的参数：  
+<Tom,list(1,1)>, <name,list(1,1)>, <is,list(1,1)>, <Your,list(1)>, <My,list(1)>, <too,list(1)>。   
+在原始需求下，当map函数计算的结果不变时，无论reduce函数算子何时执行，也无论出现故障重复执行了几次，得到的结果一定和单机单线程顺序执行相同，这也是强语义。
+结果：<Tom,2>, <name,2>, <is,2>, <Your,1>, <My,1>, <too,1>。 (key为单词，value为出现的次数)
+而如果改变原始需求，除了累加单词总共出现的次数还要返回reduce计算时的当前机器id。  
+那么此时的reduce函数就属于不确定的函数算子了，因为即使输入相同，但每一次的执行获得的结果都不一定相等（调度到不同机器上执行，机器id不同，输出的结果也就不同）。
+假设有两台reduce任务worker，id分别为aaa和bbb。  
+id为aaa的worker机器上reduce任务的执行结果就是<Tom,2-aaa>, <name,2-aaa>, <is,2-aaa>, <Your,1-aaa>, <My,1-aaa>, <too,1-aaa>,是为结果result_aaa。  
+id为bbb的worker机器上reduce任务的执行结果则是<Tom,2-bbb>, <name,2-bbb>, <is,2-bbb>, <Your,1-bbb>, <My,1-bbb>, <too,1-bbb>,是为结果result_bbb。  
+上述的弱语义表示，无论出现了什么机器故障，虽然无法准确的得知结果到底是哪一个，但最终结果不是result_aaa就是result_bbb，反正一定是某一个reduce任务生成的完整输出数据，而绝不可能出现跨任务的数据重复、冗余、缺失等问题。
+)
+
+##### 3.4 Locality(局部性)
+##### 
+Network bandwidth is a relatively scarce resource in our computing environment. 
+We conserve network bandwidth by taking advantage of the fact that the input data(managed by GFS) is stored on the local disks of the machines that make up our cluster. 
+GFS divides each file into 64 MB blocks, and stores several copies of each block (typically 3 copies) on different machines. 
+The MapReduce master takes the location information of the input files into account and attempts to schedule a map task on a machine that contains a replica of the corresponding input data. 
+Failing that, it attempts to schedule a map task near a replica of that task’s input data (e.g., on a worker machine that is on the same network switch as the machine containing the data). 
+When running large MapReduce operations on a significant fraction of the workers in a cluster, most input data is read locally and consumes no network bandwidth.
+#####
+在我们的计算环境中，网络带宽是一个相对稀缺的资源。  
+我们利用输入的数据(被GFS管理)被存储在组成我们集群的机器的本地磁盘上这一事实来节约网络带宽。    
+GFS将每个文件分割为64MB的块，同时为每一个块存储几个备份(通常是3个副本)在不同的机器上。  
+MapReduce的master调度map任务时将输入文件的位置信息考虑在内，尽量在包含对应输入数据副本的机器上调度执行一个map任务。  
+如果任务失败了，调度map任务时会让执行任务的机器尽量靠近任务所需输入数据所在的机器(举个例子，被选中的worker机器与包含数据的机器位于同一网络交换机下)。  
+当集群中的相当一部分worker都在执行大型MapReduce操作时，绝大多数的输入数据都在本地读取从而不会消耗网络带宽。
 
 
 

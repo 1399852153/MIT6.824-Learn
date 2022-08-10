@@ -430,14 +430,68 @@ However, given that there is only a single master, its failure is unlikely;
 therefore our current implementation aborts the MapReduce computation if the master fails. 
 Clients can check for this condition and retry the MapReduce operation if they desire.
 #####
-可以很简单的让master周期性的将上述的master数据结构以检查点的形式持久化。  
+可以简单的让master周期性的将上述的master数据结构以检查点的形式持久化。  
 如果master任务机器宕机了，一个新的master备份机器将会从最新的检查点状态处启动。  
 然而，考虑到只有一台master机器，是不太可能出现故障的；因此如果master故障了，我们当前的实现会中止MapReduce计算。
 客户端可以检查master的这些状态，并根据需要重试MapReduce操作。
 
+##### Semantics in the Presence of Failures(面对故障时的语义)
+#####
+When the user-supplied map and reduce operators are deterministic functions of their input values, 
+our distributed implementation produces the same output as would have been produced 
+by a non-faulting sequential execution of the entire program.
+#####
+当用户提供的map和reduce算子都是基于其输入的确定性函数时，我们所实现的分布式(计算)的输出与整个程序的一个无故障的顺序串行执行后会的输出(结果)是一样的。
 
+#####
+We rely on atomic commits of map and reduce task outputs to achieve this property. 
+Each in-progress task writes its output to private temporary files. 
+A reduce task produces one such file, and a map task produces R such files (one per reduce task). 
+When a map task completes, the worker sends a message to the master and includes the names of the R temporary files in the message. 
+If the master receives a completion message for an already completed map task, it ignores the message. 
+Otherwise, it records the names of R files in a master data structure.
+#####
+我们依赖map和reduce任务输出结果的原子性提交机制来实现这一特性。  
+每一个处理中的任务将它们的输出写入其(任务)私有的临时文件中。  
+一个reduce任务产生一个这样的文件，同时一个map任务产生R个这样的文件(共R个文件，R个reduce任务每个各对应一个文件)。  
+当一个map任务完成后，对应worker会发送给master一个消息，消息内包含了这R个临时文件名字的。  
+如果master接受到一个(已被标记为)已完成状态任务的完成消息时，其会忽略该消息。
+否则，将这R个文件的名字记录到master(维护)的数据结构中。
 
+#####
+When a reduce task completes, the reduce worker atomically renames its temporary output file to the final output file. 
+If the same reduce task is executed on multiple machines, multiple rename calls will be executed for the same final output file. 
+We rely on the atomic rename operation provided by the underlying file system to guarantee 
+that the final file system state contains just the data produced by one execution of the reduce task.
+#####
+当一个reduce任务完成了，执行reduce任务的worker会原子性的将临时的输出文件重命名为最终的输出文件。  
+如果在多台机器上有相同的reduce任务被执行，在同一个最终输出文件上将会被执行多次重命名调用。  
+我们依赖底层文件系统所提供的原子性重命名操作来保证最终文件系统中恰好只保存了一次reduce任务执行的数据。
 
+#####
+The vast majority of our map and reduce operators are deterministic, 
+and the fact that our semantics are equivalent to a sequential execution in this case makes 
+it very easy for programmers to reason about their program’s behavior.
+When the map and/or reduce operators are non-deterministic, we provide weaker but still reasonable semantics. 
+
+In the presence of non-deterministic operators, the output of a particular reduce task R 1 is equivalent to the output 
+for R 1 produced by a sequential execution of the non-deterministic program. 
+However, the output for a different reduce task R 2 may correspond to the output for R 2 produced 
+by a different sequential execution of the non-deterministic program.
+#####
+我们绝大多数的map和reduce算子都是确定性的(即：输出完全由输入决定，同样地输入有着同样地输出)，
+在这种情况下我们(分布式架构下并行执行)的语义等价于(单机)顺序串行执行，这一事实使得程序员很容易理解他们程序的行为。
+当map或reduce算子是非确定性的，我们提供了一个稍弱但依然合理的语义。  
+存在非确定性算子的情况下，一个特定reduce任务R1的输出等同于R1在非确定性程序下(单机)顺序串行执行的输出。  
+然而，另一个与R1不同的reduce任务R2的输出将会对应于R2在非确定程序中以一个不同的顺序串行执行的输出。
+
+#####
+Consider map task M and reduce tasks R 1 and R 2 . 
+Let e(R i ) be the execution of R i that committed (there is exactly one such execution). 
+The weaker semantics arise because e(R 1 ) may have read the output produced by one execution of M 
+and e(R 2 ) may have read the output produced by a different execution of M.
+#####
+考虑下目前有一个map任务M和两个reduce任务R1和R2。
 
 
 

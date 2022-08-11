@@ -529,12 +529,54 @@ MapReduce的master调度map任务时将输入文件的位置信息考虑在内�
 如果任务失败了，调度map任务时会让执行任务的机器尽量靠近任务所需输入数据所在的机器(举个例子，被选中的worker机器与包含数据的机器位于同一网络交换机下)。  
 当集群中的相当一部分worker都在执行大型MapReduce操作时，绝大多数的输入数据都在本地读取从而不会消耗网络带宽。
 
+##### 3.5 Task Granularity(任务粒度)
+#####
+We subdivide the map phase into M pieces and the reduce phase into R pieces, as described above. 
+Ideally,M and R should be much larger than the number of worker machines. 
+Having each worker perform many different tasks improves dynamic load balancing, and also speeds up recovery when a worker fails: 
+the many map tasks it has completed can be spread out across all the other worker machines.
+#####
+如上所处，我们将map阶段的任务拆分为M份，同时将reduce阶段的任务拆分为R份。  
+理想情况下，M和R的值都应该远大于worker机器的数量。  
+让每一个worker执行很多不同的任务可以提高动态负载均衡的效率，
+同时也能加快当一个worker故障时的恢复速度：（故障worker机器上）很多已经完成的map任务可以分散到所有其它的worker机器上去(重新执行)。
 
+#####
+There are practical bounds on how large M and R can be in our implementation, 
+since the master must make O(M + R) scheduling decisions and keeps O(M ∗ R)state in memory as described above. 
+(The constant factors for memory usage are small however: 
+the O(M ∗R) piece of the state consists of approximately one byte of data per map task/reduce task pair.)
+#####
+在我们的实现中，对M和R的实际大小做了限制，因为master必须O(M+R)的调度决定，同时要保持O(M*R)个如上所处的内存状态。  
+(然而这对于内存的总体使用率来说影响还是较小的：这O(M*R)份的状态里，构成每个map/reduce任务对的数据(只)占大约1字节。)
 
+#####
+Furthermore, R is often constrained by users because the output of each reduce task ends up in a separate output file. 
+In practice, we tend to choose M so that each individual task is roughly 16 MB to 64 MB of input data
+(so that the locality optimization described above is most effective), 
+and we make R a small multiple of the number of worker machines we expect to use. 
+We often perform MapReduce computations with M = 200,000 and R = 5,000, using 2,000 worker machines.
+#####
+除此之外，用户通常会限制R的大小，因为每一个reduce任务的输出最后都会在一个被拆分的输出文件中。  
+实际上，我们倾向于设置M的大小使得每个独立任务所需的输入数据大约在16MB至64MB之间(使得上文所述的局部性优化效果最好), 同时我们设置R的大小为我们预期使用worker机器数量的小几倍。  
+我们执行MapReduce计算时，通常使用2000台worker机器，并设置M的值为200000，R的值为5000。
 
-
-
-
+##### 3.6 Backup Tasks(后备任务)
+#####
+One of the common causes that lengthens the total time taken for a MapReduce operation is a “straggler”:
+a machine that takes an unusually long time to complete one of the last few map or reduce tasks in the computation.
+Stragglers can arise for a whole host of reasons.
+For example, a machine with a bad disk may experience frequent correctable errors that slow its read performance from 30 MB/s to 1 MB/s.
+The cluster scheduling system may have scheduled other tasks on the machine,
+causing it to execute the MapReduce code more slowly due to competition for CPU, memory, local disk, or network bandwidth.
+A recent problem we experienced was a bug in machine initialization code that caused processor caches to be disabled:
+computations on affected machines slowed down by over a factor of one hundred.
+#####
+导致MapReduce运算总耗时变长的一个常见的原因是存在“落伍者”：即一台机器花费了异常长的时间去完成计算中最后的几个map或reduce任务。
+导致“落伍者”出现的原因多种多样。 
+举个例子，一台有着坏磁盘的机器可能会在(读取磁盘时)频繁进行纠错，使得磁盘的读取性能从每秒30MB下降到每秒1MB。  
+集群调度系统可能还将其它任务也调度到了这台机器上，由于CPU、内存、本地磁盘或网络带宽的竞争，使得MapReduce代码的执行变得更加的缓慢。  
+我们最近遇到的一个问题是由机器初始化代码中的一个bug导致的，其禁用了处理器的缓存：受到影响的机器其计算速度(比正常情况下)慢了100倍以上。
 
 
 

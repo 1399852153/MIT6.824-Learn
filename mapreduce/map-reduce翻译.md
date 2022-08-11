@@ -561,7 +561,7 @@ We often perform MapReduce computations with M = 200,000 and R = 5,000, using 2,
 实际上，我们倾向于设置M的大小使得每个独立任务所需的输入数据大约在16MB至64MB之间(使得上文所述的局部性优化效果最好), 同时我们设置R的大小为我们预期使用worker机器数量的小几倍。  
 我们执行MapReduce计算时，通常使用2000台worker机器，并设置M的值为200000，R的值为5000。
 
-##### 3.6 Backup Tasks(后备任务)
+##### 3.6 Backup Tasks(备份任务)
 #####
 One of the common causes that lengthens the total time taken for a MapReduce operation is a “straggler”:
 a machine that takes an unusually long time to complete one of the last few map or reduce tasks in the computation.
@@ -578,9 +578,48 @@ computations on affected machines slowed down by over a factor of one hundred.
 集群调度系统可能还将其它任务也调度到了这台机器上，由于CPU、内存、本地磁盘或网络带宽的竞争，使得MapReduce代码的执行变得更加的缓慢。  
 我们最近遇到的一个问题是由机器初始化代码中的一个bug导致的，其禁用了处理器的缓存：受到影响的机器其计算速度(比正常情况下)慢了100倍以上。
 
+#####
+We have a general mechanism to alleviate the problem of stragglers.
+When a MapReduce operation is close to completion, the master schedules backup executions of the remaining in-progress tasks. 
+The task is marked as completed whenever either the primary or the backup execution completes. 
+We have tuned this mechanism so that it typically increases the computational resources used by the operation by no more than a few percent.
+We have found that this significantly reduces the time to complete large MapReduce operations. 
+As an example, the sort program described in Section 5.3 takes 44% longer to complete when the backup task mechanism is disabled.
+#####
+我们有一个通用的机制来减轻“落伍者”问题带来的影响。  
+当一个MapReduce运算接近完成时，master将会调度剩下的处理中的任务进行备份执行(backup executions)。  
+无论是主执行完成还是备份执行完成，这些任务都会被标记为已完成。  
+我们已经对这个机制进行了优化，使得通常这一操作令所使用的计算资源增加不会超过几个百分点。  
+我们发现这一操作显著减少了大型MapReduce操作的完成时间。  
+例如，如果禁用备份任务这一机制，在5.3节中所述的排序程序将多花费44%的时间才能完成。
 
+### 4 Refinements(改进)
+#####
+Although the basic functionality provided by simply writing Map and Reduce functions is sufficient for most needs, we have found a few extensions useful. 
+These are described in this section.
+#####
+尽管已提供的编写简单Map和Reduce函数的功能能满足大多数需求，但我们还发现了一些有价值的拓展。
+本章节将对此进行介绍。
 
-
+##### 4.1 Partitioning Function(分区函数)
+#####
+The users of MapReduce specify the number of reduce tasks/output files that they desire (R). 
+Data gets partitioned across these tasks using a partitioning function on the intermediate key. 
+A default partitioning function is provided that uses hashing (e.g. “hash(key) mod R”).
+This tends to result in fairly well-balanced partitions. 
+In some cases, however, it is useful to partition data by some other function of the key. 
+For example, sometimes the output keys are URLs, and we want all entries for a single host to end up in the same output file. 
+To support situations like this, the user of the MapReduce library can provide a special partitioning function. 
+For example, using “hash(Hostname(urlkey)) mod R” as the partitioning function causes all URLs from the same host to end up in the same output file.
+#####
+MapReduce用户期望能指定reduce任务/输出文件的数量。  
+在这些任务中，使用一个基于中间态key的分区函数对数据进行分区。
+(我们)提供了一个使用哈希取模的默认的分区函数(例如：“hash(key) mod R”)。
+这往往会得到一个非常均衡的分区结果。  
+然而在有些情况下，令其它的一些基于key的分区函数对数据进行分区是很有用的。  
+举个例子，有时输出的key是URL，我们希望同一个主机上的所有条目最后都写入同一个输出文件中。  
+为了支持这种场景，MapReduce库的用户可以提供一个自定义的分区函数。  
+举个例子，使用“hash(Hostname(urlkey)) mod R”作为分区函数，就可以使得来自同一个主机的所有URL(条目)最终都写入同一个输出文件中。
 
 
 

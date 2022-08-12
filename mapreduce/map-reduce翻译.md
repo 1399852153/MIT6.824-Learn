@@ -335,8 +335,8 @@ When the user program calls the MapReduce function, the following sequence of ac
    这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。
 
 3. 一个被分配了map任务的worker，读取被拆分后的对应输入内容。
-   从输入的数据中解析出key/value键值对，并将每一个kv作为参数传递给用户自定义的map函数。 
-   map函数会产生中间态的key/value键值对，并被缓存在内存之中。
+   从输入的数据中解析出key/value键值对，并将每一个kv对作为参数传递给用户自定义的map函数。 
+   map函数产生的中间态key/value键值对会被缓存在内存之中。
 
 4. 每隔一段时间，缓存在内存中的kv对会被写入本地磁盘，并被分区函数划分为R个区域。
    这些在本地磁盘上被缓冲的kv对的位置将会被回传给master，master负责将这些位置信息转发给后续执行reduce任务的worker。
@@ -561,7 +561,7 @@ We often perform MapReduce computations with M = 200,000 and R = 5,000, using 2,
 实际上，我们倾向于设置M的大小使得每个独立任务所需的输入数据大约在16MB至64MB之间(使得上文所述的局部性优化效果最好), 同时我们设置R的大小为我们预期使用worker机器数量的小几倍。  
 我们执行MapReduce计算时，通常使用2000台worker机器，并设置M的值为200000，R的值为5000。
 
-##### 3.6 Backup Tasks(备份任务)
+##### 3.6 Backup Tasks(后备任务)
 #####
 One of the common causes that lengthens the total time taken for a MapReduce operation is a “straggler”:
 a machine that takes an unusually long time to complete one of the last few map or reduce tasks in the computation.
@@ -587,11 +587,11 @@ We have found that this significantly reduces the time to complete large MapRedu
 As an example, the sort program described in Section 5.3 takes 44% longer to complete when the backup task mechanism is disabled.
 #####
 我们有一个通用的机制来减轻“落伍者”问题带来的影响。  
-当一个MapReduce运算接近完成时，master将会调度剩下的处理中的任务进行备份执行(backup executions)。  
-无论是主执行完成还是备份执行完成，这些任务都会被标记为已完成。  
-我们已经对这个机制进行了优化，使得通常这一操作令所使用的计算资源增加不会超过几个百分点。  
-我们发现这一操作显著减少了大型MapReduce操作的完成时间。  
-例如，如果禁用备份任务这一机制，在5.3节中所述的排序程序将多花费44%的时间才能完成。
+当一个MapReduce运算接近完成时，master将会调度剩下的处理中的任务进行后备执行(backup executions)。  
+无论是主执行完成还是后备执行完成，这些任务都会被标记为已完成。  
+我们已对这个机制进行了优化，使得这一操作令所使用的计算资源增加通常不会超过几个百分点。  
+我们发现这一操作明显减少了大型MapReduce操作的完成时间。  
+例如，如果禁用后备任务这一机制，在5.3节中所述的排序程序将多花费44%的时间才能完成。
 
 ### 4 Refinements(改进)
 #####
@@ -614,15 +614,75 @@ For example, using “hash(Hostname(urlkey)) mod R” as the partitioning functi
 #####
 MapReduce用户期望能指定reduce任务/输出文件的数量。  
 在这些任务中，使用一个基于中间态key的分区函数对数据进行分区。
-(我们)提供了一个使用哈希取模的默认的分区函数(例如：“hash(key) mod R”)。
+(我们)提供了一个使用哈希取模的默认分区函数(例如：“hash(key) mod R”)。
 这往往会得到一个非常均衡的分区结果。  
-然而在有些情况下，令其它的一些基于key的分区函数对数据进行分区是很有用的。  
-举个例子，有时输出的key是URL，我们希望同一个主机上的所有条目最后都写入同一个输出文件中。  
+然而在有些情况下，使用其它的一些基于key的分区函数对数据进行分区是很有用的。  
+举个例子，有时(map任务)输出的key是URL，且我们希望同一个主机上的所有条目最后都写入同一个输出文件中。  
 为了支持这种场景，MapReduce库的用户可以提供一个自定义的分区函数。  
 举个例子，使用“hash(Hostname(urlkey)) mod R”作为分区函数，就可以使得来自同一个主机的所有URL(条目)最终都写入同一个输出文件中。
 
+##### 4.2 Ordering Guarantees(有序性保证)
+#####
+We guarantee that within a given partition, the intermediate key/value pairs are processed in increasing key order.
+This ordering guarantee makes it easy to generate a sorted output file per partition,
+which is useful when the output file format needs to support efficient random access lookups by key,
+or users of the output find it convenient to have the data sorted.
+#####
+我们保证在给定的分区内，中间态的k/v对是以中间态key值递增的顺序处理的。  
+这一有序性保证使得能简单的为每个分区生成一个已排序的输出文件，
+当输出文件的格式需要支持基于key来进行高效随机查找时(这一机制)会很有价值,或者用户需要已经排好序的数据时会很方便。
 
+##### 4.3 Combiner Function(组合器函数)
+#####
+In some cases, there is significant repetition in the intermediate keys produced by each map task, 
+and the user-specified Reduce function is commutative and associative. 
+A good example of this is the word counting example in Section 2.1. 
+Since word frequencies tend to follow a Zipf distribution, each map task will produce hundreds or thousands of records of the form <the, 1>. 
+All of these counts will be sent over the network to a single reduce task and then added together by the Reduce function to produce one number. 
+We allow the user to specify an optional Combiner function that does partial merging of this data before it is sent over the network.
+#####
+在一些情况下，每个map任务所生成的中间态key存在明显的重复，同时用户自定义的reduce函数具备可交换性和可结合性。  
+2.1章节中的单词计数的示例程序就是一个很好的例子。  
+由于单词出现的频率遵循齐夫分布(Zipf distribution)，因此每一个map任务都将生成几百或几千的形如<the,1>的记录。
+所有的这些计数将通过网络发送给一个单独的reduce任务，然后再通过reduce函数累加它们而生成一个数字。  
+我们允许用户指定一个可选的Combiner函数,在数据通过网络发送前该函数将对数据进行不完全的合并。
 
+#####
+The Combiner function is executed on each machine that performs a map task.
+Typically the same code is used to implement both the combiner and the reduce functions.
+The only difference between a reduce function and a combiner function is how the MapReduce library handles the output of the function.
+The output of a reduce function is written to the final output file.
+The output of a combiner function is written to an intermediate file that will be sent to a reduce task.
+#####
+Combiner函数能在每一个执行map任务的机器上执行。  
+通常情况下，combiner函数和reduce函数的代码实现是相同的。  
+reduce函数和combiner函数间唯一的不同在于MapReduce是如何处理函数的输出。
+一个reduce函数的输出会写入最终的输出文件中。  
+而一个combiner函数的输出会被写入到一个中间态的文件中，并且将会发送给reduce任务。
+
+#####
+Partial combining significantly speeds up certain classes of MapReduce operations. 
+Appendix A contains an example that uses a combiner.
+#####
+部分合并可以明显加快某些MapReduce操作的速度。
+附录A中包含了一个使用combiner的例子。
+
+##### 4.4 Input and Output Types(输入和输出的类型)
+##### 
+The MapReduce library provides support for reading input data in several different formats.
+For example, “text” mode input treats each line as a key/value pair: the key is the offset in the file and the value is the contents of the line.
+Another common supported format stores a sequence of key/value pairs sorted by key.
+Each input type implementation knows how to split itself into meaningful ranges for processing as separate map tasks
+(e.g. text mode’s range splitting ensures that range splits occur only at line boundaries).
+Users can add support for a new input type by providing an implementation of a simple reader interface,
+though most users just use one of a small number of predefined input types.
+#####
+MapReduce库为多种不同格式输入数据的读取提供了支持。  
+例如。"文本"模式下将每一行的输入视为一个kv键值对：key是该行在文件中的偏移量，而value是该行的内容。  
+另一种所支持的常用格式则存储基于key排序的一连串kv键值对。 
+每一个输入类型的实现知道如何将输入的数据划分为有意义的区间，用以在一个独立的map任务中处理。
+(举个例子，文本模式划分区间时确保了只会在每一行的边界上出现区间的划分)  
+通过提供一个简单的reader接口实现，用户可以增加支持一种新的输入类型，尽管大多数用户只会使用一个或少数几个预定义的输入类型。
 
 
 

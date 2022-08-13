@@ -682,8 +682,75 @@ MapReduce库为多种不同格式输入数据的读取提供了支持。
 另一种所支持的常用格式则存储基于key排序的一连串kv键值对。 
 每一个输入类型的实现知道如何将输入的数据划分为有意义的区间，用以在一个独立的map任务中处理。
 (举个例子，文本模式划分区间时确保了只会在每一行的边界上出现区间的划分)  
-通过提供一个简单的reader接口实现，用户可以增加支持一种新的输入类型，尽管大多数用户只会使用一个或少数几个预定义的输入类型。
+通过提供一个简单的reader接口实现，用户可以增加支持一种新的输入类型，即使大多数用户只会使用一个或少数几个预定义的输入类型。
 
+#####
+A reader does not necessarily need to provide data read from a file. 
+For example, it is easy to define a reader that reads records from a database, or from data structures mapped in memory.
+#####
+reader不一定只能通过读取文件来提供数据。
+举个例子，很容易定义一个reader去数据库中读取记录，或者从被映射在内存中的数据结构中读取数据。
 
+#####
+In a similar fashion, we support a set of output types for producing data in different formats 
+and it is easy for user code to add support for new output types.
+#####
+类似的，我们也支持多种不同格式的输出数据，且用户代码中可以轻松地支持新增的一种新输出类型。
 
+##### 4.5 Side-effects(副作用)
+#####
+In some cases, users of MapReduce have found it convenient to produce auxiliary files as additional outputs from their map and/or reduce operators. 
+We rely on the application writer to make such side-effects atomic and idempotent. 
+Typically the application writes to a temporary file and atomically renames this file once it has been fully generated.
+#####
+在某些场景下，MapReduce的用户发现从他们的map或reduce操作中生成辅助文件作为额外的输出可以为其带来一些便利。
+我们依赖应用程序的作者(自己在程序中保证)使得这些副作用具有原子性和幂等性。  
+通常，应用程序会(将额外的输出)写入一个临时文件，并且一旦完全生成该文件后便原子性的重命名这一文件。
 
+#####
+We do not provide support for atomic two-phase commits of multiple output files produced by a single task.
+Therefore, tasks that produce multiple output files with cross-file consistency requirements should be deterministic. 
+This restriction has never been an issue in practice.
+#####
+我们没有为单个任务生成多个文件的场景提供原子性二阶段提交的支持。
+因此，会生成多个输出文件且具有跨文件一致性需求的任务应该是确定性的（任务是确定性函数算子）。
+在我们的实践中，这一限制并没有带来什么问题。
+
+##### 4.6 Skipping Bad Records(跳过错误的记录)
+#####
+Sometimes there are bugs in user code that cause the Map or Reduce functions to crash deterministically on certain records. 
+Such bugs prevent a MapReduce operation from completing. 
+The usual course of action is to fix the bug, but sometimes this is not feasible; perhaps the bug is in a third-party library for which source code is unavailable. 
+Also, sometimes it is acceptable to ignore a few records, for example when doing statistical analysis on a large data set. 
+We provide an optional mode of execution where the MapReduce library detects which records cause deterministic crashes and skips these records in order to make forward progress.
+#####
+又是用户的代码中存在一些bug，造成了Map或Reduce函数在处理某些数据时必定崩溃。  
+这些bug会阻止MapReduce操作的完成。  
+通常的做法是修复这个bug，但有时这是行不通的；可能这个bug是位于三方库中，且无法获得其源代码的。  
+当然，有时忽略掉少量的数据是可以接受的，比如对一个大型数据集上进行统计分析时。  
+我们提供了一个可选的执行方式，当MapReduce库检测到某些记录一定会导致崩溃时，跳过这些记录并继续向前推进。
+
+#####
+Each worker process installs a signal handler that catches segmentation violations and bus errors. 
+Before invoking a user Map or Reduce operation, the MapReduce library stores the sequence number of the argument in a global variable. 
+If the user code generates a signal, the signal handler sends a “last gasp” UDP packet that contains the sequence number to the MapReduce master. 
+When the master has seen more than one failure on a particular record, it indicates that the record should be skipped when it issues the next re-execution of the corresponding Map or Reduce task.
+#####
+每个worker进程都安装了一个信号处理器，用于捕获段异常(segmentation violations)和总线错误(bus errors)。  
+在调用用户的Map或Reduce操作前，MapReduce库会将参数的序列号存储在一个全局变量中。  
+如果用户代码产生了一个信号，则信号处理器将会向MapReduce的master发送一个包含了(该参数)序列号的"最后喘息(last gasp)"UDP包。  
+当master一个特定的记录不止一次的导致故障时，master会指示对应的Map或Reduce任务在下一次重新执行时应该跳过该记录。
+
+##### 4.7 Local Execution(本地执行)
+#####
+Debugging problems in Map or Reduce functions can be tricky, since the actual computation happens in a distributed system, 
+often on several thousand machines, with work assignment decisions made dynamically by the master. 
+To help facilitate debugging, profiling, and small-scale testing, we have developed an alternative implementation of the MapReduce library 
+that sequentially executes all of the work for a MapReduce operation on the local machine. 
+Controls are provided to the user so that the computation can be limited to particular map tasks. 
+Users invoke their program with a special flag and can then easily use any debugging or testing tools they find useful (e.g. gdb).
+#####
+在实际计算发生在分布式系统中时，调试Map或Reduce函数会变得很棘手，通常由master动态的在几千台机器上决定工作的分配。   
+为了更利于调试、分析和小规模的测试，我们开发了一个(运行在本地机器上的)MapReduce库的可替代实现，该库能让所有的MapReduce工作在本地机器上顺序执行。  
+控制权被交给了用户,使得计算可以被限制在指定的Map任务中。  
+用户通过一个特殊的标志来调用他们的程序，然后可以轻松地使用任何他们觉得好用的调试或者测试工具(例如：gdb)。

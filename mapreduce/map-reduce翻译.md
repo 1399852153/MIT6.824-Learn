@@ -801,3 +801,30 @@ map(String name, String contents) :
             uppercase->Increment();
         EmitIntermediate(w,"1");
 ```
+
+#####
+The counter values from individual worker machines are periodically propagated to the master (piggybacked on the ping response). 
+The master aggregates the counter values from successful map and reduce tasks and returns them to the user code when the MapReduce operation is completed.
+The current counter values are also displayed on the master status page so that a human can watch the progress of the live computation. 
+When aggregating counter values, the master eliminates the effects of duplicate executions of the same map or reduce task to avoid double counting. 
+(Duplicate executions can arise from our use of backup tasks and from re-execution of tasks due to failures.)
+#####
+独立worker机器中的counter值会周期性的传递给master(在ping响应包中附带)  
+master将来自已经成功完成的map和reduce任务中的counter值聚合在一起，并在MapReduce任务完成时返回给用户代码。  
+当前的counter值也会展示在master的状态页上，使得用户可以看到实时的计算进度。  
+在聚合counter值时，master消除了同一个map或reduce任务多次执行的影响，避免了重复计数。  
+(多次执行出现的原因是我们的备份任务或任务故障时的重复执行导致的)
+
+#####
+Some counter values are automatically maintained by the MapReduce library, 
+such as the number of input key/value pairs processed and the number of output key/value pairs produced.
+#####
+有些counter值是由MapReduce自行维护的，例如已处理的输入k/v对的数量和已生成的输出k/v对的数量。
+
+#####
+Users have found the counter facility useful for sanity checking the behavior of MapReduce operations. 
+For example, in some MapReduce operations, the user code may want to ensure that the number of output pairs produced exactly equals the number of input pairs processed, 
+or that the fraction of German documents processed is within some tolerable fraction of the total number of documents processed.
+#####
+用户发现计数器功能能很好的用于检查MapReduce操作的行为是否正常。  
+例如，在某些MapReduce操作中，用户代码想要确保已生成的k/v对数量严格等于已处理的输入k/v对数量，或者确保已处理的德语文档数量在已处理的全部文档中的占比是否处于一个可接受的比例内。

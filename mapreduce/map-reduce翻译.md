@@ -874,7 +874,7 @@ The input is split into approximately 64MB pieces (M = 15000), and the entire ou
 grep程序扫描通过扫描10^10个100字节大小的记录，搜索一个相对比较少见的3字符模式(这个模式只出现在92337条记录中)。  
 输入数据被分割为大约64MB大小的块(M = 15000)，并且完整的输出被放在了一个文件中(R = 1)。
 
-![Figure 2：Data transfer rate over time.png](Data transfer rate over time.png)
+![Figure 2：Data transfer rate over time.png](figure2 Data transfer rate over time.png)
 
 #####
 Figure 2 shows the progress of the computation over time. 
@@ -915,3 +915,50 @@ The final sorted output is written to a set of 2-way replicated GFS files(i.e., 
 我们使用内置的恒等函数(Identity function)作为Reduce算子。
 这个函数传入中间态的k/v键值对，并且不做任何修改的将之作为输出的k/v键值对。
 最终完成排序的输出被写入了一个双向复制的GFS文件集合中(即程序总共写入、输出了2TB的数据)。
+
+#####
+As before, the input data is split into 64MB pieces(M = 15000). 
+We partition the sorted output into 4000 files (R = 4000). 
+The partitioning function uses the initial bytes of the key to segregate it into one of R pieces.
+#####
+如上所述，输入的数据被分给为64MB的块(M = 15000)。
+我们将排好序后的输出数据分割为4000个文件(R = 4000)。
+分区函数基于key的初始字节值将其分割为R份。
+
+#####
+Our partitioning function for this benchmark has built-in knowledge of the distribution of keys. 
+In a general sorting program, we would add a pre-pass MapReduce operation 
+that would collect a sample of the keys and use the distribution of the sampled keys to compute split-points for the final sorting pass.
+#####
+我们的基准测试中内置的分区函数是了解key值具体分布的。
+在一个常规的排序程序中，我们会预先插入一个MapReduce操作，该操作将会收集key值的一个样本并且基于key值样本的分布情况来计算最终排序时需要的分割点。
+![figure3 Data transfer rates over time for different executions of the sort program.png](figure3 Data transfer rates over time for different executions of the sort program.png)
+
+#####
+Figure 3 (a) shows the progress of a normal execution of the sort program. 
+The top-left graph shows the rate at which input is read. 
+The rate peaks at about 13 GB/s and dies off fairly quickly since all map tasks finish before 200 seconds have elapsed. 
+Note that the input rate is less than for grep. 
+This is because the sort map tasks spend about half their time and I/O bandwidth writing intermediate output to their local disks. 
+The corresponding intermediate output for grep had negligible size.
+#####
+图3的a部分展示了一个排序程序的正常执行过程。  
+左上角的图表标识了输入数据读取的速率。
+输入数据速率的峰值为13GB每秒，由于所有的map任务都在200秒内完成了因此其非常快速地降到了零。
+请注意输入速率是小于上述地grep程序的。
+这是因为排序的map任务有一半的耗时和I/O带宽用于将的中间态的输出写入它们机器的本地磁盘。
+而相应的，grep任务的中间态输出则可以忽略不计。
+
+#####
+The middle-left graph shows the rate at which data is sent over the network from the map tasks to the reduce tasks.
+This shuffling starts as soon as the first map task completes. 
+The first hump in the graph is for the first batch of approximately 1700 reduce tasks 
+(the entire MapReduce was assigned about 1700 machines, and each machine executes at most one reduce task at a time). 
+Roughly 300 seconds into the computation, some of these first batch of reduce tasks finish and we start shuffling data for the remaining reduce tasks. 
+All of the shuffling is done about 600 seconds into the computation.
+#####
+左边排中间的图表标识了map任务通过网络将数据发送给reduce任务的速率。  
+这一转换在第一个map任务完成不久后便开始了。
+图表中的第一个高峰对应着第一批的大约1700个reduce任务(整个MapReduce分配了1700台机器，并且每一台机器同一时间至多只能执行一个reduce任务)
+大概执行了300秒的计算时，第一批的一些reduce任务陆续完成并且剩余的reduce任务继续转换数据。
+所有的转换大概在计算执行了600秒时完成。

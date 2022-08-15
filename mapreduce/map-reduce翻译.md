@@ -828,3 +828,90 @@ or that the fraction of German documents processed is within some tolerable frac
 #####
 用户发现计数器功能能很好的用于检查MapReduce操作的行为是否正常。  
 例如，在某些MapReduce操作中，用户代码想要确保已生成的k/v对数量严格等于已处理的输入k/v对数量，或者确保已处理的德语文档数量在已处理的全部文档中的占比是否处于一个可接受的比例内。
+
+##### 5 Performance(性能)
+#####
+In this section we measure the performance of MapReduce on two computations running on a large cluster of machines. 
+One computation searches through approximately one terabyte of data looking for a particular pattern. 
+The other computation sorts approximately one terabyte of data.
+#####
+在这一章节，我们通过在大型机器集群上运行的两个MapReduce计算来测量MapReduce的性能。  
+其中一个计算是在大约1TB的数据中检索特定的模式。
+另一个计算是对大约1TB的数据进行排序。
+
+#####
+These two programs are representative of a large subset of the real programs written by users 
+of MapReduce–one class of programs shuffles data from one representation to another,
+and another class extracts a small amount of interesting data from a large data set.
+#####
+上述两个程序代表了现实中大多数MapReduce用户所编写的程序，一类程序将数据从一种表示方式转化为另一种表示方式，而另一类程序则从一个大的数据集中提取出少量感兴趣的数据。
+
+##### 5.1 Cluster Configuration(集群配置)
+#####
+All of the programs were executed on a cluster that consisted of approximately 1800 machines. 
+Each machine had two 2GHz Intel Xeon processors with Hyper-Threading enabled, 4GB of memory, two 160GB IDE disks, and a gigabit Ethernet link. 
+The machines were arranged in a two-level tree-shaped switched network 
+with approximately 100-200 Gbps of aggregate band-width available at the root. 
+All of the machines were in the same hosting facility and therefore the round-trip time between any pair of machines was less than a millisecond.
+#####
+所有的程序都在一个由大约1800台机器组成的集群上被执行。  
+每台机器都配置有两颗开启了超线程功能的、2GHZ主频的Intel至强处理器，4GB的内存，两块160GB容量的IDE硬盘，以及一条千兆的以太网链路。
+所有机器都被安置在一个双层的树形交换网络中，根节点处的总可用网络带宽大概为100-200GB每秒。  
+所有的机器都位于同一个主机托管设施(hosting facility)内，因此任意一对机器间的(网络交互的)往返时间都低于1毫秒。
+
+#####
+Out of the 4GB of memory, approximately 1-1.5GB was reserved by other tasks running on the cluster. 
+The programs were executed on a weekend afternoon, when the CPUs, disks, and network were mostly idle.
+#####
+在4GB的内存中，大约1-1.5GB的内存是为集群上要运行的其它任务而保留的。  
+任务是在周末的下午执行的，(因为)这个时间点CPU、硬盘和网络一般都是空闲的。  
+
+##### 5.2 Grep(Globally search a Regular Expression and Print 基于正则表达式的全局搜索并打印)
+#####
+The grep program scans through 10^10 100-byte records, searching for a relatively rare three-character pattern (the pattern occurs in 92,337 records).
+The input is split into approximately 64MB pieces (M = 15000), and the entire output is placed in one file (R = 1).
+#####
+grep程序扫描通过扫描10^10个100字节大小的记录，搜索一个相对比较少见的3字符模式(这个模式只出现在92337条记录中)。  
+输入数据被分割为大约64MB大小的块(M = 15000)，并且完整的输出被放在了一个文件中(R = 1)。
+
+![Figure 2：Data transfer rate over time.png](Data transfer rate over time.png)
+
+#####
+Figure 2 shows the progress of the computation over time. 
+The Y-axis shows the rate at which the input data is scanned. 
+The rate gradually picks up as more machines are assigned to this MapReduce computation, 
+and peaks at over 30 GB/s when 1764 workers have been assigned.
+As the map tasks finish, the rate starts dropping and hits zero about 80 seconds into the computation. 
+The entire computation takes approximately 150 seconds from start to finish. 
+This includes about a minute of startup overhead. The overhead is due to the propagation of the program to all worker machines, 
+and delays interacting with GFS to open the set of 1000 input files and to get the information needed for the locality optimization.
+#####
+图二展示了随时间推移的计算进度。
+Y轴标识着扫描输入数据的速率。
+随着越来越多的机器被分配给当前MapReduce计算，扫描输入数据的速率也越来越快，并且当分配了1764个worker机器时其峰值达到了30GB每秒。
+当map任务完成后，扫描输入数据的速率开始下降并在计算执行到大约80秒的时候降至0。  
+整个计算从开始到结束大概耗时150秒。
+这其中包括了一分钟左右的启动开销。
+这一开销是由于需要将程序分发到所有的worker机器上，以及为了打开1000个输入文件集合而与GFS交互并获得局部性优化信息的延迟。
+
+##### 5.3 Sort(排序)
+#####
+The sort program sorts 10^10 100-byte records (approximately 1 terabyte of data). 
+This program is modeled after the TeraSort benchmark.
+#####
+这个排序程序对10^10个100字节大小的记录进行排序(大约1TB的数据)。
+这个程序是参照TeraSort基准测试程序而编写的。
+
+#####
+The sorting program consists of less than 50 lines of user code. 
+A three-line Map function extracts a 10-byte sorting key from a text line and emits the key
+and the original text line as the intermediate key/value pair. 
+We used a built-in Identity function as the Reduce operator.
+This functions passes the intermediate key/value pair unchanged as the output key/value pair. 
+The final sorted output is written to a set of 2-way replicated GFS files(i.e., 2 terabytes are written as the output of the program).
+#####
+排序程序包含了少于50行的用户代码。
+一个三行的Map函数从一个文本行中提取出一个10字节大小的、用于排序的key并且发出该key，并将原始的文本行作为value而生成中间态的k/v键值对。  
+我们使用内置的恒等函数(Identity function)作为Reduce算子。
+这个函数传入中间态的k/v键值对，并且不做任何修改的将之作为输出的k/v键值对。
+最终完成排序的输出被写入了一个双向复制的GFS文件集合中(即程序总共写入、输出了2TB的数据)。

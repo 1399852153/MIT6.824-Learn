@@ -290,7 +290,7 @@ The number of partitions (R) and the partitioning function are specified by the 
 通过一个分区函数将中间态的key值空间划分为R份(例如: hash(key) mod R, 对key做hash后再对R求模)，Reduce调用也得以分布式的执行。  
 划分的个数(R)和分区函数都由用户来指定。
 
-![执行概述.png](Execution_Overview.png)
+![执行概述.png](figure1%20Execution_Overview.png)
 
 #####
 Figure 1 shows the overall flow of a MapReduce operation in our implementation. 
@@ -962,3 +962,114 @@ All of the shuffling is done about 600 seconds into the computation.
 图表中的第一个高峰对应着第一批的大约1700个reduce任务(整个MapReduce分配了1700台机器，并且每一台机器同一时间至多只能执行一个reduce任务)
 大概执行了300秒的计算时，第一批的一些reduce任务陆续完成并且剩余的reduce任务继续转换数据。
 所有的转换大概在计算执行了600秒时完成。
+
+#####
+The bottom-left graph shows the rate at which sorted data is written to the final output files by the reduce tasks.
+There is a delay between the end of the first shuffling period 
+and the start of the writing period because the machines are busy sorting the intermediate data. 
+The writes continue at a rate of about 2-4 GB/s for a while. All of the writes finish about 850 seconds into the computation.
+Including startup overhead, the entire computation takes 891 seconds. 
+This is similar to the current best reported result of 1057 seconds for the TeraSort benchmark.
+#####
+左下方的图表标识了reduce任务将排序好的数据写入最终的输出文件的速率。  
+在第一个转换(shuffling)阶段结束到开始写入之间存在一点延迟，其原因是机器此时正忙于对中间态的数据进行排序。  
+写入数据的以2-4GB每秒的速率持续了一段时间。所有的写入大约在计算执行至850秒左右时完成。
+包括启动的开销在内，整个计算过程共耗时891秒。
+这与TeraSort基准测试目前已报告的最快记录很相近。
+
+#####
+A few things to note: the input rate is higher than the shuffle rate and the output rate because of our locality optimization 
+– most data is read from a local disk and bypasses our relatively bandwidth constrained network.
+The shuffle rate is higher than the output rate because the output phase writes two copies of the sorted data 
+(we make two replicas of the output for reliability and availability reasons). 
+We write two replicas because that is the mechanism for reliability and availability provided by our underlying file system. 
+Network bandwidth requirements for writing data would be reduced if the underlying file system used erasure coding rather than replication.
+#####
+有几点值得注意：  
+* 输入的速录比转换和输出的速率要高很多，其原因在于我们进行了局部性优化。大多数的数据是从本地的硬盘中读取的，从而避免使用我们相对有限的网络带宽。  
+* 转换速率比输出速率要高很多，其原因在于输出阶段写入了已排序数据的两个备份(出于可靠性和可用性的考虑，我们构建了两个输出数据的备份)。  
+  我们写入两个备份的原因在于这是我们底层文件系统所提供的可靠性和可用性的机制。
+* 如果底层文件系统使用纠错码(Erasure Coding)来代替复制(来保证可靠性)，则需要写入数据时所需要的网络带宽将减少很多。
+
+##### 5.4 Effect of Backup Tasks(后备任务的影响)
+#####
+In Figure 3 (b), we show an execution of the sort program with backup tasks disabled. 
+The execution flow is similar to that shown in Figure 3 (a), except that there is a very long tail where hardly any write activity occurs.
+After 960 seconds, all except 5 of the reduce tasks are completed. 
+However these last few stragglers don’t finish until 300 seconds later. 
+The entire computation takes 1283 seconds, an increase of 44% in elapsed time.
+#####
+在图3的b部分，我们展示了禁用后备任务时排序程序的执行状况。  
+执行流与图3的a部分很相似，除了最后面有一个非常长的尾部，且其几乎没有任何写入发生(注意观察代表done的那条竖线)。  
+在960s后，除了5个reduce任务外其它任务都已经完成。
+然而最后几个“落伍者”任务直到300秒后才相继完成。整个计算过程共花费了1283秒，(相比正常执行的情况)增加了44%的耗时。
+
+##### 5.5 Machine Failures(机器故障)
+#####
+In Figure 3 (c), we show an execution of the sort program 
+where we intentionally killed 200 out of 1746 worker processes several minutes into the computation. 
+The underlying cluster scheduler immediately restarted new worker processes on these machines 
+(since only the processes were killed, the machines were still functioning properly).
+#####
+在图3的c部分，我们展示了一个排序程序的执行流程，在其计算过程中我们故意在几分钟内杀死(killed)了1746台worker机器中的200台机器(的worker进程)。  
+底层的集群调度器立即在这些机器上重新启动新的worker进程(因为只是杀掉了worker进程，机器依然是正常工作的)。
+
+#####
+The worker deaths show up as a negative input rate since some previously completed map work disappears
+(since the corresponding map workers were killed) and needs to be redone. 
+The re-execution of this map work happens relatively quickly. 
+The entire computation finishes in 933 seconds including startup overhead (just an increase of 5% over the normal execution time).
+#####
+worker进程被杀死时展示一个负的输入速率，因为之前已完成的任务失效了(因为对应的map worker被杀掉了)并且这些任务需要被重新执行。  
+map任务的重新执行相对来说是比较快的。
+包括启动开销在内，整个计算过程共耗时933秒（相较于正常执行时的耗时，只增加了5%）
+
+### 6 Experience(经验)
+#####
+We wrote the first version of the MapReduce library in February of 2003, and made significant enhancements to it in August of 2003, 
+including the locality optimization, dynamic load balancing of task execution across worker machines, etc. 
+Since that time, we have been pleasantly surprised at how broadly applicable the MapReduce library has been for the kinds of problems we work on.
+It has been used across a wide range of domains within Google, including:
+* large-scale machine learning problems,
+* clustering problems for the Google News and Froogle products,
+* extraction of data used to produce reports of popular queries (e.g. Google Zeitgeist),
+* extraction of properties of web pages for new experiments and products 
+  (e.g. extraction of geographical locations from a large corpus of web pages for localized search), and
+* large-scale graph computations.
+  
+#####
+我们于2003年2月编写了第一版的MapReduce库，并且在2003年的8月对其进行了重大改进，其中包括局部性优化、跨worker机器间任务执行的动态负载均衡等等。  
+从那时起，我们惊喜的看到MapReduce库被广泛的应用于我们工作中所遇到的各种问题上。
+MapReduce库已在谷歌内的许多领域中被广泛的使用，其中包括：
+* 大规模的机器学习问题
+* Google新闻和Froogle产品的聚类问题(clustering problems)
+* 基于常见查询所产出的报告提取数据(例如，Google Zeitgeist (注：Google开发的一款网络查询分析程序))
+* 基于新实验和产品的网页提取相关属性(例如，从用于本地化搜索的大型网页语料库中提取地理位置)
+* 大规模的图计算
+
+#####
+![Figure 4: MapReduce instances over time](Figure%204%20MapReduce%20instances%20over%20time.png)
+#####
+![Table 1: MapReduce jobs run in August 2004.png](Table 1: MapReduce jobs run in August 2004.png)
+
+#####
+Figure 4 shows the significant growth in the number of separate MapReduce programs 
+checked into our primary source code management system over time, 
+from 0 in early 2003 to almost 900 separate instances as of late September 2004. 
+MapReduce has been so successful because it makes it possible to write a simple program 
+and run it efficiently on a thousand machines in the course of half an hour, greatly speeding up the development and prototyping cycle. 
+Furthermore, it allows programmers who have no experience with distributed and/or parallel systems to exploit large amounts of resources easily.
+#####
+图4展示了登记在我们主要的源码管理系统中的独立MapReduce程序数量随着时间的推移有着显著的增长，
+从2003年年初的0个,再到2004年的9月有了接近900个独立的MapReduce程序实例了。
+MapReduce如此成功的原因在于其使得编写一个简单的程序，并在半小时内于上千台机器上高效的运行成为了可能，这极大地加快了开发和原型设计的周期。  
+此外，MapReduce允许没有任何分布式或并行系统开发经验的程序员得以轻松的利用大量的(计算)资源。
+
+#####
+At the end of each job, the MapReduce library logs statistics about the computational resources used by the job.
+In Table 1, we show some statistics for a subset of MapReduce jobs run at Google in August 2004.
+#####
+在每个job完成时，MapReduce库会以日志的形式记录对应job所使用的计算资源的统计信息。  
+在表1中，我们展示了谷歌在2004年8月所运行的MapReduce job的一个子集的(所使用计算资源的)一些统计信息。
+
+

@@ -86,7 +86,7 @@ Section 7 discusses related and future work.
 第三章介绍了一个针对集群计算环境的MapReduce接口实现。
 第四章介绍了几个我们发现的，关于该编程模型的有效改进。
 第五章则是关于我们对各式各样任务所实施的性能测量。
-第六章探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建生产环境索引系统的经验。
+第六章探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建索引生成系统的经验。
 第七章讨论了一些相关的话题以及日后要做的工作。
 
 ### 2 Programming Model（编程模型）
@@ -1071,5 +1071,40 @@ In Table 1, we show some statistics for a subset of MapReduce jobs run at Google
 #####
 在每个job完成时，MapReduce库会以日志的形式记录对应job所使用的计算资源的统计信息。  
 在表1中，我们展示了谷歌在2004年8月所运行的MapReduce job的一个子集的(所使用计算资源的)一些统计信息。
+
+##### 6.1 Large-Scale Indexing(大规模索引)
+#####
+One of our most significant uses of MapReduce to date has been a complete rewrite 
+of the production indexing system that produces the data structures used for the Google web search service. 
+The indexing system takes as input a large set of documents that have been retrieved by our crawling system, stored as a set of GFS files. 
+The raw contents for these documents are more than 20 terabytes of data.
+The indexing process runs as a sequence of five to ten MapReduce operations. 
+Using MapReduce(instead of the ad-hoc distributed passes in the prior version of the indexing system) has provided several benefits:
+#####
+迄今为止，我们对MapReduce最重要的一个应用就是完全重写了索引生成系统，其生成的数据结构被用于Google web的搜索服务。  
+索引系统将我们的爬虫系统所检索到的、被存储为一系列GFS文件的大量文档作为输入。
+这些文档的原始内容的数据大小超过了20TB。
+整个索引处理过程由5到10个连续的MapReduce操作组成。  
+使用MapReduce(而不是之前版本索引系统的点对点分布式传输)能带来几个好处:
+
+#####
+* The indexing code is simpler, smaller, and easier to understand, because the code that deals with fault tolerance, 
+  distribution and parallelization is hidden within the MapReduce library. 
+  For example, the size of one phase of the computation dropped from approximately 3800 lines of C++ code 
+  to approximately 700 lines when expressed using MapReduce.
+#####
+* 索引相关的代码变得更简单、(代码量)更少和更容易理解，因为处理容错、分布式和并行化的代码被隐藏在了MapReduce库内部。
+  例如，某一计算阶段的代码量在(改为)使用MapReduce表达后从(原来的)大约3800行c++代码降低至大约700行。
+  
+* The performance of the MapReduce library is good enough that we can keep conceptually unrelated computations separate, 
+  instead of mixing them together to avoid extra passes over the data. 
+  This makes it easy to change the indexing process. 
+  For example, one change that took a few months to make in our old indexing system took only a few days to implement in the new system.
+
+* The indexing process has become much easier to operate, because most of the problems caused by machine failures, slow machines, 
+  and networking hiccups are dealt with automatically by the MapReduce library without operator intervention. 
+  Furthermore, it is easy to improve the performance of the indexing process by adding new machines to the indexing cluster.  
+
+
 
 

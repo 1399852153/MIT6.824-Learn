@@ -1129,3 +1129,50 @@ on smaller scales and leave the details of handling machine failures to the prog
 MapReduce可以被认为是基于我们在现实世界中关于大型计算的经验所总结出的一些模型的一个简化和精炼。
 更重要的是，我们提供了一个可拓展到几千个处理器规模的容错实现。  
 相比之下，大多数的并行处理系统的实现只能运用在更小的规模下，并且将处理机器故障的细节留给了程序员(去实现)。
+
+#####
+Bulk Synchronous Programming and some MPI primitives provide higher-level abstractions that make it easier for programmers to write parallel programs. 
+A key difference between these systems and MapReduce is that MapReduce exploits a restricted programming model 
+to parallelize the user program automatically and to provide transparent fault-tolerance.
+#####
+整体同步程序(Bulk Synchronous Programming)和一些消息传递接口(MPI Message-Passing Interface)原语提供了更高级别的抽象，使得程序员可以更加简单的编写并行程序。  
+这些系统与MapReduce最关键的不同在于MapReduce利用一个受限的编程模型令用户程序自动的并行化并且了提供透明的(用户无需感知的)容错机制。
+
+
+#####
+Our locality optimization draws its inspiration from techniques such as active disks, where computation is pushed into processing elements 
+that are close to local disks, to reduce the amount of data sent across I/O subsystems or the network. 
+We run on commodity processors to which a small number of disks are directly connected instead of running directly on disk controller processors,
+but the general approach is similar.
+#####
+我们局部性优化机制的灵感源自active disks等技术，推进计算并使得所要处理的元素是靠近本地磁盘的，以减少通过网络I/O子系统发送的数据量。  
+我们的计算运行在直连少量磁盘的商用处理器上，而不是直接运行在有着磁盘控制器的处理器(disk controller processors)上，但大致的方法是类似的。
+
+#####
+Our backup task mechanism is similar to the eager scheduling mechanism employed in the Charlotte System. 
+One of the shortcomings of simple eager scheduling is that if a given task causes repeated failures, the entire computation fails to complete. 
+We fix some instances of this problem with our mechanism for skipping bad records.
+#####
+我们的后备任务机制类似于Charlotte系统中所应用的紧急调度(eager scheduling)机制。
+简单的紧急调度机制的一个缺点就是如果一个给定的任务反复失败，则整个计算将无法完成。  
+我们通过跳过有问题记录的机制，一定程度上的修复了这一问题。
+
+#####
+The MapReduce implementation relies on an in-house cluster management system that is responsible for distributing and running user tasks on a large collection of shared machines. 
+Though not the focus of this paper, the cluster management system is similar in spirit to other systems such as Condor.
+
+#####
+The sorting facility that is a part of the MapReduce library is similar in operation to NOW-Sort. 
+Source machines (map workers) partition the data to be sorted and send it to one of R reduce workers. 
+Each reduce worker sorts its data locally (in memory if possible). 
+Of course NOW-Sort does not have the user-definable Map and Reduce functions that make our library widely applicable.
+
+#####
+River provides a programming model where processes communicate with each other by sending data over distributed queues. 
+Like MapReduce, the River system tries to provide good average case performance even in the presence of non-uniformities introduced by heterogeneous hardware or system perturbations. 
+River achieves this by careful scheduling of disk and network transfers to achieve balanced completion times. 
+MapReduce has a different approach. 
+By restricting the programming model, the MapReduce framework is able to partition the problem into a large number of fine-grained tasks. 
+These tasks are dynamically scheduled on available workers so that faster workers process more tasks. 
+The restricted programming model also allows us to schedule redundant executions of tasks near the end of the job which greatly reduces completion time in the presence of non-uniformities 
+(such as slow or stuck workers).

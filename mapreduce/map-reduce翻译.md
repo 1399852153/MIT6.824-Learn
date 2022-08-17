@@ -1096,15 +1096,36 @@ Using MapReduce(instead of the ad-hoc distributed passes in the prior version of
 * 索引相关的代码变得更简单、(代码量)更少和更容易理解，因为处理容错、分布式和并行化的代码被隐藏在了MapReduce库内部。
   例如，某一计算阶段的代码量在(改为)使用MapReduce表达后从(原来的)大约3800行c++代码降低至大约700行。
   
+#####
 * The performance of the MapReduce library is good enough that we can keep conceptually unrelated computations separate, 
   instead of mixing them together to avoid extra passes over the data. 
   This makes it easy to change the indexing process. 
   For example, one change that took a few months to make in our old indexing system took only a few days to implement in the new system.
-
+#####
+* MapReduce库的性能是足够好的，这使得我们可以将概念上无关的计算进行拆分，而不是将它们混合在一起，从而避免额外的数据传输。  
+  这使得可以简单的改变索引的处理过程。
+  举个例子，在我们老的索引系统中曾进行的一次改动耗费了我们几个月的时间，而在新系统中去实现则只需要几天时间。
+  
+#####
 * The indexing process has become much easier to operate, because most of the problems caused by machine failures, slow machines, 
   and networking hiccups are dealt with automatically by the MapReduce library without operator intervention. 
   Furthermore, it is easy to improve the performance of the indexing process by adding new machines to the indexing cluster.  
-
-
-
-
+#####
+* 处理索引变得更容易操作，因为大多数机器故障、机器执行缓慢和网络间歇性断开(networking hiccups)等问题都由MapReduce库自动处理了，而不需操作员介入。  
+  此外，通过向索引处理的集群中添加新的机器可以轻松地提高索引处理的性能。
+  
+### 7 Related Work(相关工作)
+#####
+Many systems have provided restricted programming models and used the restrictions to parallelize the computation automatically. 
+For example,an associative function can be computed over all prefixes of an N element array in logN time 
+on N processors using parallel prefix computations. 
+MapReduce can be considered a simplification and distillation of some of these models based on our experience with large real-world computations.
+More significantly, we provide a fault-tolerant implementation that scales to thousands of processors.
+In contrast, most of the parallel processing systems have only been implemented 
+on smaller scales and leave the details of handling machine failures to the programmer.
+#####
+很多系统都提供了受限制的编程模型，并且使用这些约束来自动的将计算并行化。
+举个例子，使用并行前缀计算时，一个结合函数可以在N个处理器上，以logN的时间计算出一个N元素数组的所有前缀。  
+MapReduce可以被认为是基于我们在现实世界中关于大型计算的经验所总结出的一些模型的一个简化和精炼。
+更重要的是，我们提供了一个可拓展到几千个处理器规模的容错实现。  
+相比之下，大多数的并行处理系统的实现只能运用在更小的规模下，并且将处理机器故障的细节留给了程序员(去实现)。

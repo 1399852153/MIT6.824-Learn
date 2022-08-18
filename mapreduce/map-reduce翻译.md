@@ -1138,7 +1138,6 @@ to parallelize the user program automatically and to provide transparent fault-t
 整体同步程序(Bulk Synchronous Programming)和一些消息传递接口(MPI Message-Passing Interface)原语提供了更高级别的抽象，使得程序员可以更加简单的编写并行程序。  
 这些系统与MapReduce最关键的不同在于MapReduce利用一个受限的编程模型令用户程序自动的并行化并且了提供透明的(用户无需感知的)容错机制。
 
-
 #####
 Our locality optimization draws its inspiration from techniques such as active disks, where computation is pushed into processing elements 
 that are close to local disks, to reduce the amount of data sent across I/O subsystems or the network. 
@@ -1158,21 +1157,108 @@ We fix some instances of this problem with our mechanism for skipping bad record
 我们通过跳过有问题记录的机制，一定程度上的修复了这一问题。
 
 #####
-The MapReduce implementation relies on an in-house cluster management system that is responsible for distributing and running user tasks on a large collection of shared machines. 
+The MapReduce implementation relies on an in-house cluster management system 
+that is responsible for distributing and running user tasks on a large collection of shared machines. 
 Though not the focus of this paper, the cluster management system is similar in spirit to other systems such as Condor.
+#####
+MapReduce的实现依赖于一个内部的集群管理系统，该系统负责在大量的共享机器中分发和运行用户的任务。  
+虽然这并不是本论文的重点，但该集群管理系统从本质上来说和Condor系统非常相似。
 
 #####
 The sorting facility that is a part of the MapReduce library is similar in operation to NOW-Sort. 
 Source machines (map workers) partition the data to be sorted and send it to one of R reduce workers. 
 Each reduce worker sorts its data locally (in memory if possible). 
 Of course NOW-Sort does not have the user-definable Map and Reduce functions that make our library widely applicable.
+#####
+排序机制做为MapReduce库的一部分，在操作上与NOW-Sort类似。  
+源机器(map workers)将待排序的数据进行分区，并将其发送给R个reduce worker中的一个。  
+每一个reduce worker在本地对数据进行(尽可能的在内存中排序)。  
+当然，NOW-Sort不支持使得可用户自定义的Map和Reduce函数，相比之下我们的MapReduce库则有着更广的适用范围。
 
 #####
 River provides a programming model where processes communicate with each other by sending data over distributed queues. 
-Like MapReduce, the River system tries to provide good average case performance even in the presence of non-uniformities introduced by heterogeneous hardware or system perturbations. 
+Like MapReduce, the River system tries to provide good average case performance 
+even in the presence of non-uniformities introduced by heterogeneous hardware or system perturbations. 
 River achieves this by careful scheduling of disk and network transfers to achieve balanced completion times. 
 MapReduce has a different approach. 
 By restricting the programming model, the MapReduce framework is able to partition the problem into a large number of fine-grained tasks. 
 These tasks are dynamically scheduled on available workers so that faster workers process more tasks. 
-The restricted programming model also allows us to schedule redundant executions of tasks near the end of the job which greatly reduces completion time in the presence of non-uniformities 
+The restricted programming model also allows us to schedule redundant executions of tasks near the end of the job 
+which greatly reduces completion time in the presence of non-uniformities 
 (such as slow or stuck workers).
+#####
+River提供了一个编程模型，该模型中进程间通过向分布式队列中发送数据来进行通信。  
+和MapReduce一样，即使由于异构的硬件或者系统扰动而导致了(计算资源的)不均衡，River系统也试图在这种场景下提供足够均衡的性能。  
+River通过仔细的对磁盘和网络传输进行调度，用以实现任务完成时间的平衡。  
+MapReduce则采用了不同的方法。
+通过受限的编程模型，MapReduce框架能够将一个问题分割为大量细粒度的任务。
+这些任务会在可用的worker机器上动态的调度，因此运行速度更快的worker能够处理更多的任务。  
+这一受限的编程模型也允许我们在job接近完成时进行冗余任务的调度，这可以极大地减少在非均衡场景下的任务完成时间(比如存在缓慢或者卡住不动的worker)。
+
+#####
+BAD-FS has a very different programming model from MapReduce, and unlike MapReduce, 
+is targeted to the execution of jobs across a wide-area network. 
+However, there are two fundamental similarities.
+Both systems use redundant execution to recover from data loss caused by failures. 
+Both use locality-aware scheduling to reduce the amount of data sent across congested network links.
+#####
+BAD-FS是一个与MapReduce非常不同的编程模型。与MapReduce不同，其致力于跨广域网的执行job。  
+然而，这里有两个很相似的基本点。
+两个系统都使用冗余的执行来恢复由故障导致的数据丢失。
+两者都使用距离敏感的调度策略，用以减少在拥挤的网络链路上所发送数据的数量。
+
+#####
+TACC is a system designed to simplify construction of highly-available networked services.
+Like MapReduce, it relies on re-execution as a mechanism for implementing fault-tolerance.
+#####
+TACC是一个旨在简化高性能网络服务构造的框架。
+和MapReduce一样，其也依赖重复执行机制来实现故障容错。
+
+### 8 Conclusions(总结)
+#####
+The MapReduce programming model has been successfully used at Google for many different purposes. 
+We attribute this success to several reasons. 
+First, the model is easy to use, even for programmers without experience with parallel and distributed systems, 
+since it hides the details of parallelization, fault-tolerance, locality optimization, and load balancing. 
+Second, a large variety of problems are easily expressible as MapReduce computations. 
+For example, MapReduce is used for the generation of data for Google’s production web search service, 
+for sorting, for data mining, for machine learning, and many other systems. 
+Third, we have developed an implementation of MapReduce that scales to large clusters of machines comprising thousands of machines. 
+The implementation makes efficient use of these machine resources
+and therefore is suitable for use on many of the large computational problems encountered at Google.
+#####
+MapReduce编程模型已经成功的在谷歌中被广泛应用。  
+我们认为这一成功出于几个原因。
+首先，这一模型很容易使用，因为其隐藏了并行化、故障容错、局部性优化以及负载均衡的细节，即使是没有并行计算和分布式系统经验的程序员也能轻松地使用。  
+其次，各种各样的问题都能用MapReduce计算轻松地表达。
+例如，MapReduce被用于为谷歌的网络搜索产品生成数据、也被用于排序、用于数据挖掘、用于机器学习以及其它的很多系统。  
+再次，我们已开发的MapReduce实现可以被扩展到包含数千台机器的大型集群中。
+这一实现使得众多机器资源能被有效的利用，因此其很适合谷歌所遇到的许多大型计算问题。
+
+#####
+We have learned several things from this work. 
+First, restricting the programming model makes it easy to parallelize and distribute computations and to make such computations fault-tolerant.
+Second, network bandwidth is a scarce resource. 
+A number of optimizations in our system are therefore targeted at reducing the amount of data sent across the network: 
+the locality optimization allows us to read data from local disks, 
+and writing a single copy of the intermediate data to local disk saves network bandwidth. 
+Third, redundant execution can be used to reduce the impact of slow machines, and to handle machine failures and data loss.
+#####
+我们从这项工作中学到了一些事情。
+首先，受限制的计算模型能够简化并行化和分布式计算，并且能够令这些计算具有容错性。  
+其次，网络带宽是一种稀缺资源。
+因此我们的系统中有许多致力于减少在网络中传输数据数量的优化：局部性优化允许我们从本地磁盘中读取数据，以及将中间态数据的单个备份写入本地磁盘以节约网络带宽。  
+再次，冗余的重复执行可以用于减少慢机器的影响，以及处理机器故障和数据丢失。
+
+### Acknowledgements(致谢)
+#####
+Josh Levenberg has been instrumental in revising and extending the user-level MapReduce API with a number of new features 
+based on his experience with using MapReduce and other people’s suggestions for enhancements. 
+MapReduce reads its input from and writes its output to the Google File System. 
+We would like to thank Mohit Aron, Howard Gobioff, Markus Gutschke, David Kramer, Shun-Tak Leung, and Josh Redstone 
+for their work in developing GFS. 
+We would also like to thank Percy Liang and Olcan Sercinoglu for their work in developing the cluster management system used by MapReduce.
+Mike Burrows, Wilson Hsieh, Josh Levenberg, Sharon Perl, Rob Pike, and Debby Wallach provided helpful comments on earlier drafts of this paper.
+The anonymous OSDI reviewers, and our shepherd, Eric Brewer, provided many useful suggestions of areas where the paper could be improved. 
+Finally, we thank all the users of MapReduce within Google’s engineering organization 
+for providing helpful feedback, suggestions, and bug reports.

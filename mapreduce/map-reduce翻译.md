@@ -9,9 +9,9 @@ Users specify a map function that processes a key/value pair to generate a set o
 and a reduce function that merges all intermediate values associated with the same intermediate key. 
 Many real world tasks are expressible in this model, as shown in the paper.
 #####
-MapReduce是一个关于实施大型数据集处理和生成的编程模型。
-用户指定一个用于处理**k/v对**并生成**中间态k/v对集合**的映射（map）函数，以及一个用于合并所有具有相同中间态key的中间态value值的归约（reduce）函数。
-很多现实世界中的任务都可以通过该模型（MapReduce）表达，后续的论文中将会展示这一点。
+MapReduce是一个关于实施大型数据集处理和生成的编程模型。  
+用户指定一个用于处理**k/v对**并生成**中间态k/v对集合**的映射（map）函数，以及一个用于合并所有具有相同中间态key的中间态value值的归约（reduce）函数。  
+很多现实世界中的任务都可以通过该模型（MapReduce）表达，在后续的论文中将会展示这一点。  
 
 #####
 Programs written in this functional style are automatically parallelized and executed on a large cluster of commodity machines. 
@@ -21,8 +21,8 @@ and managing the required inter-machine communication.
 This allows programmers without any experience with parallel and distributed systems 
 to easily utilize the resources of a large distributed system.
 #####
-以这种函数式风格编写的程序可以在一个大型的商用机器集群中自动、并行的执行。
-该系统在运行时会关注如下细节：输入数据的分割，在一系列机器间跨机器的调度程序的执行，机器故障的处理以及管理集群内机器间的必要通信。
+以这种函数式风格编写的程序可以在一个大型的商用机器集群中自动、并行的执行。  
+该系统在运行时会关注如下细节：输入数据的分割，在一系列机器间跨机器的调度程序的执行，机器故障的处理以及管理集群内机器间的必要通信。  
 这（使用MapReduce）使得没有任何并行计算、分布式系统经验的程序员们都可以轻松利用大型分布式系统中的资源。
 
 #####
@@ -31,7 +31,7 @@ a typical MapReduce computation processes many terabytes of data on thousands of
 Programmers find the system easy to use: hundreds of MapReduce programs have been implemented 
 and upwards of one thousand MapReduce jobs are executed on Google’s clusters every day.
 #####
-我们已实现的MapReduce运行在一个大型商用机器集群上，而且具有高度的可拓展性：一个典型的MapReduce计算可以在数千台机器上处理TB级别的数据。
+我们已实现的MapReduce运行在一个大型商用机器集群上，而且具有高度的可拓展性：一个典型的MapReduce计算可以在数千台机器上处理TB级别的数据。  
 程序员们发现系统很容易使用：已经有数以百计的MapReduce程序被实现，并且每天都有一千以上的MapReduce任务运行在谷歌的（计算机）集群中。
 
 ### 1 Introduction（介绍）
@@ -45,9 +45,9 @@ However, the input data is usually large and the computations have to be distrib
 The issues of how to parallelize the computation, distribute the data, 
 and handle failures conspire to obscure the original simple computation with large amounts of complex code to deal with these issues.
 #####
-在过去的五年时间里，包括作者在内的许多谷歌工作人员实现了数以百计的、用于特殊目的的计算程序来处理大量的原始数据，例如爬虫获取到的文档、网络请求日志等等。
-其目的是为了计算出各种类型的衍生数据，例如倒排索引、多种关于web文档的图结构表示、被每个主机所爬取的页面数摘要、给定的某天中被最频繁查询的集合等等。
-大多数这样的计算在概念上都很简单，然而输入的数据却通常是巨大的。而且为了能在一个合理的时间范围内完成，计算操作需要被分配到数百甚至数千台机器上运行。
+在过去的五年时间里，包括作者在内的许多谷歌工作人员实现了数以百计的、用于特殊目的的计算程序来处理大量的原始数据，例如爬虫获取到的文档、网络请求日志等等。  
+其目的是为了计算出各种类型的衍生数据，例如倒排索引、多种关于web文档的图结构表示、被每个主机所爬取的页面数摘要、给定的某天中被最频繁查询的集合等等。  
+大多数这样的计算在概念上都很简单，然而输入的数据却通常是巨大的。而且为了能在一个合理的时间范围内完成，计算操作需要被分配到数百甚至数千台机器上运行。  
 关于如何并行计算，如何分派数据以及如何处理故障等问题被混杂在了一起，使得原本简单的计算逻辑被用于处理这些问题的大量复杂代码所模糊。
 
 #####
@@ -59,10 +59,10 @@ and then applying a reduce operation to all the values that shared the same key,
 Our use of a functional model with user specified map and reduce operations allows us to parallelize large computations easily
 and to use re-execution as the primary mechanism for fault tolerance.
 #####
-为了应对这些复杂性，我们设计了一个全新的抽象，该抽象允许我们表达我们想要执行的简单计算，但是将关于并行化、容错、数据分发和负载均衡等机制中复杂、繁琐的细节隐藏在了库中。
-我们的这一抽象其设计灵感是来源于Lisp和很多其它函数式语言中的map和reduce原语。
+为了应对这些复杂性，我们设计了一个全新的抽象，该抽象允许我们表达我们想要执行的简单计算，但是将关于并行化、容错、数据分发和负载均衡等机制中复杂、繁琐的细节隐藏在了库中。  
+我们的这一抽象其设计灵感是来源于Lisp和很多其它函数式语言中的map和reduce原语。  
 我们意识到我们的绝大多数计算都涉及到为每一个输入的逻辑记录应用(applying)一个map映射操作，目的是对输入集计算从而将其转化为一个中间态的k/v对集合；
-然后为了恰当地合并衍生数据，再对所有拥有相同key值的k/v对中的value值应用一个reduce规约操作。 
+然后为了恰当地合并衍生数据，再对所有拥有相同key值的k/v对中的value值应用一个reduce规约操作。  
 通过一个由用户指定具体逻辑的map和reduce操作的函数式模型，使得我们能轻易地并行化大规模的计算，并且将重复执行（自动重试）机制作为容错的主要手段。
 
 #####
@@ -70,8 +70,8 @@ The major contributions of this work are a simple and powerful interface that en
 and distribution of large-scale computations, 
 combined with an implementation of this interface that achieves high performance on large clusters of commodity PCs.
 #####
-这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式的执行。
-结合该接口的实现，从而在大型的商用PC集群中获得高性能。
+这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式的执行。  
+结合该接口的实现，得以在大型的商用PC集群中获得很高的性能。
 
 #####
 Section 2 describes the basic programming model and gives several examples. 
@@ -82,27 +82,27 @@ Section 6 explores the use of MapReduce within Google including our experiences 
 as the basis for a rewrite of our production indexing system. 
 Section 7 discusses related and future work.
 #####
-第二章介绍了基本的编程模型并给出了几个示例。
-第三章介绍了一个针对集群计算环境的MapReduce接口实现。
-第四章介绍了几个我们发现的，关于该编程模型的有效改进。
-第五章则是关于我们对各式各样任务所实施的性能测量。
-第六章探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建索引生成系统的经验。
-第七章讨论了一些相关的话题以及日后要做的工作。
+第二章介绍了基本的编程模型并给出了几个示例。  
+第三章介绍了一个针对集群计算环境的MapReduce接口实现。  
+第四章介绍了几个我们发现的，关于该编程模型的有效改进。  
+第五章则是关于我们对各种任务所实施的性能测试。  
+第六章探讨了MapReduce在谷歌内部的应用，其中包括了我们以MapReduce为基础去重建索引生成系统的经验。  
+第七章讨论了一些相关的话题以及日后要做的工作。  
 
 ### 2 Programming Model（编程模型）
 #####
 The computation takes a set of input key/value pairs, and produces a set of output key/value pairs. 
 The user of the MapReduce library expresses the computation as two functions: Map and Reduce.
 #####
-该计算获得并输入一个k/v键值对集合，然后生成并输出一个k/v键值对集合。
-MapReduce库的用户通过Map和Reduce这两个函数来表达计算逻辑。
+某一计算获得并输入一个k/v键值对集合，然后生成并输出一个k/v键值对集合。  
+MapReduce库的用户通过Map和Reduce这两个函数来表达该计算逻辑。
 
 #####
 Map, written by the user, takes an input pair and produces a set of intermediate key/value pairs. 
 The MapReduce library groups together all intermediate values associated with the same intermediate key _I_ 
 and passes them to the Reduce function.
 #####
-Map函数是由用户编写的，获得一个输入的k/v对并且生成一个中间态的k/v对。
+Map函数是由用户编写的，获得一个输入的k/v对并生成一个中间态的k/v对。  
 MapReduce库对所有的k/v对进行分组，使得所有有着相同中间态key值的k/v对的value值组合在一起，然后将它们传递给Reduce函数。
 
 #####
@@ -112,17 +112,18 @@ Typically just zero or one output value is produced per Reduce invocation.
 The intermediate values are supplied to the user’s reduce function via an iterator. 
 This allows us to handle lists of values that are too large to fit in memory.
 #####
-Reduce函数也是由用户编写的，其接收一个中间态的key值和与该键对应的一组value值的集合。 它会将这些value值进行统一的合并以形成一个可能更小的value值集合。
-通常，每次reduce调用只会生成零个或一个输出值。这个中间态的value集合通过一个迭代器提供给用户的reduce函数。
-这允许我们得以处理那些无法被完整放入内存的，过大的list集合。
+Reduce函数也是由用户编写的，其接收一个中间态的key值和与该键对应的一组value值的集合。  
+它会将这些value值进行统一的合并以形成一个可能更小的value值集合。  
+通常，每次reduce调用只会生成零个或一个输出值。这个中间态的value集合通过一个迭代器提供给用户的reduce函数。  
+这允许我们得以处理那些无法被完整放入内存的，过大的列表集合。
 
-###2.1 Example（示例）
+### 2.1 Example（示例）
 #####
 Consider the problem of counting the number of occurrences of each word in a large collection of documents. 
 The user would write code similar to the following pseudo-code:
 #####
-思考一个关于再一个大型文档集合中计算每一个单词出现次数的程序。
-用户将写下形如以下伪代码的代码：
+思考一个关于在一个大型文档集合中计算每一个单词出现次数的程序。  
+用户可能会写下形如以下伪代码的程序：
 ```
 map(String key, String value):
     // key: document name
@@ -142,8 +143,8 @@ reduce(String key, Iterator values):
 The map function emits each word plus an associated count of occurrences (just ‘1’ in this simple example).
 The reduce function sums together all counts emitted for a particular word.
 #####
-这个map映射函数发出每一个单词，并附加上其出现的次数（在这个简单的例子中恰好是1）。
-这个reduce规约函数则累加统计每一个发出的特定单词所有的出现计数。
+这个map映射函数生成每一个单词以及其出现的次数（在这个简单的例子中次数恰好是1）。  
+reduce函数则累加每一个生成的特定单词其所有的出现计数。
 
 #####
 In addition, the user writes code to fill in a mapreduce specification object with the names of the input and output files, and optional tuning parameters. 
@@ -151,18 +152,16 @@ The user then invokes the MapReduce function, passing it the specification objec
 The user’s code is linked together with the MapReduce library (implemented in C++). 
 Appendix A contains the full program text for this example.
 #####
-此外，用户编写代码以指定的输入、输出文件的名字和可选的调优参数来填充一个规范的mapreduce对象。
-用户然后调用MapReduce函数，传递这个符合规范的对象。
-用户的代码与MapReduce库（c++实现）进行链接。
+此外，用户编写代码以指定的输入、输出文件的名字和可选的调优参数来填充一个规范的mapreduce对象。  
+用户随后调用MapReduce函数，传递这个符合规范的对象。用户的代码与MapReduce库（c++实现）进行链接。  
 附录A包含了本示例的完整程序文本。
 
-###2.2 Types（类型）
+### 2.2 Types（类型）
 #####
 Even though the previous pseudo-code is written in terms of string inputs and outputs, 
 conceptually the map and reduce functions supplied by the user have associated types:
 #####
-尽管前面的伪代码是依据字符串类型的输入、输出编写的，
-从概念上说，用户提供的map和reduce函数在类型上是有关联的：
+尽管前面的伪代码是依据字符串类型的输入、输出编写的，但从概念上说，用户提供的map和reduce函数在类型上是有关联的：
 ```
 map (k1,v1) --> list(k2,v2)
 reduce (k2,list(v2)) --> list (v2)
@@ -172,14 +171,14 @@ reduce (k2,list(v2)) --> list (v2)
 I.e., the input keys and values are drawn from a different domain than the output keys and values. 
 Furthermore, the intermediate keys and values are from the same domain as the output keys and values.
 #####
-举个例子，输入的key和value和输出的key和value取自不同的域。
-此外，中间态的key和value和输出的key和value则来自相同的域。
+举个例子，输入的key和value和输出的key和value分属不同的域。  
+此外，中间态的key和value和输出的key和value则属于相同的域。
 
 #####
 Our C++ implementation passes strings to and from the user-defined functions 
 and leaves it to the user code to convert between strings and appropriate types.
 #####
-我们在c++实现中传递字符串，作为用户自定义函数的输入和输出，并将其留给用户代码在字符串（类型）与合适的类型间进行转化。
+我们在c++的实现中传递字符串，以作为用户自定义函数的输入和输出，并将字符串（类型）与合适的类型间进行转化的逻辑留给用户代码实现。
 
 ### 2.3 More Examples（更多的例子）
 #####
@@ -192,24 +191,24 @@ Here are a few simple examples of interesting programs that can be easily expres
 The reduce function is an identity function that just copies the supplied intermediate data to the output.
 #####
 **分布式Grep:**  
-map函数输出匹配某个给定规则的一行。  
-reduce函数是一个恒等函数，其只是将所输入的中间数据复制到输出（恒等函数：f(x) = x, 即输入=输出）。
+map函数如果匹配某个给定规则则输出对应的那一行。  
+reduce函数是一个恒等函数，其只是将所输入的中间数据原封不动的复制到输出（译者小熊餐馆注：恒等函数：f(x) = x, 即输入=输出）。
 
 #####
 **Count of URL Access Frequency:** The map function processes logs of web page requests and outputs <URL,1>.
 The reduce function adds together all values for the same URL and emits a <URL,total count> pair.
 #####
 **URL访问频率计数:**  
-map函数处理网页请求的处理日志，并且输出<URL,1（访问数为1）>的键值对。  
+map函数处理网页请求的处理日志，并且输出<URL,1>的键值对。  
 reduce函数累加所有具有相同URL键值对的value值，并且输出一个<URL,总访问数>的键值对。
 
 #####
 **Reverse Web-Link Graph:** The map function outputs (target,source) pairs for each link to a target URL found in a page named source. 
 The reduce function concatenates the list of all source URLs associated with a given target URL and emits the pair:(target,_list_(source))
 #####
-**反向网络链接图:**   
+**反向web链接图:**   
 map函数从每一个源页面（source）中找出每一个目标页URL（target）的链接，输出（target，source）格式的kv对。  
-reduce函数将所有具有相同target目标页的所有源页面（source）连接在一起组成一个列表，输出这样一个kv对（target,_list_(source)）。
+reduce函数将所有具有相同target目标页的所有源页面（source）结合在一起组成一个列表，输出这样一个kv对（target,_list_(source)）。
 
 #####
 **Term-Vector per Host:** A term vector summarizes the most important words that occur in a document 
@@ -219,10 +218,10 @@ The reduce function is passed all per-document term vectors for a given host.
 It adds these term vectors together, throwing away infrequent terms, and then emits a final<hostname,term vector> pair.
 #####
 **每台主机的检索词向量**:  
-汇总从一个或一系列文档中出现的最重要单词作为检索词向量（term-vector），生成以<word(单词),frequency(出现频次)>格式的kv对列表。  
+汇总从一个或一系列文档中出现的最重要的单词作为检索词向量（term-vector），生成以<word(单词),frequency(出现频次)>格式的kv对列表。  
 map函数针对每一个输入的文档，输出一个<hostname(主机名),term vector(检索词向量)>的kv对（主机名是从文档的URL中提取出来的）。  
-reduce函数接收一个给定host下所有的、基于每个文档的term-vectors(检索词向量)。将这些检索词向量进行累加，抛弃掉一些出现频率较低的检索词项，
-然后返回最终的<hostname(主机名),term vector(检索词向量)>的kv对。
+reduce函数接收一个给定host下基于每个文档的所有term-vectors(检索词向量)。  
+将这些检索词向量进行累加，抛弃掉一些出现频率较低的检索词项然后返回最终的<hostname(主机名),term vector(检索词向量)>的kv对。
 
 #####
 **Inverted Index:** The map function parses each document, and emits a sequence of <word,document ID>pairs. 
@@ -233,27 +232,26 @@ It is easy to augment this computation to keep track of word positions.
 **倒排索引:**  
 map函数解析每一个文档，然后输出一连串<word(单词)，documentID(文档ID)>格式的kv对。  
 reduce函数接收一个给定单词对应的所有kv对，针对文档ID进行排序然后返回一个<word(单词),_list_documentID(文档ID列表)>格式的kv对。  
-所有输出的kv对集合构成了一个简单的倒排索引。基于此，我们能简单的增加这种计算来追踪每一个单词(在这些文档中)的位置。
+所有输出的kv对集合构成了一个简单的倒排索引。基于此，我们能简单的增加记录每一个单词(在这些文档中)的位置的计算功能。
 
 #####
 Distributed Sort: The map function extracts the key from each record, and emits a <key,record> pair. 
 The reduce function emits all pairs unchanged. 
 This computation depends on the partitioning facilities described in Section 4.1 and the ordering properties described in Section 4.2.
 #####
-**分布式排序:**
-map函数提取每一个记录中的key值，然后返回一个<key,record>格式的kv对。
+**分布式排序:**  
+map函数提取每一个记录中的key值，然后返回一个<key,record>格式的kv对。  
 reduce函数对所有的kv对不做修改直接返回。  
-该计算依赖于后续4.1章节中所述的分区机制和4.2章节中所述的排序属性。
+该计算依赖于后续4.1章节中所述的分区机制和4.2章节中所述的有序性机制。
 
 ### 3 Implementation(实现)
 #####
-Many different implementations of the MapReduce interface are possible. 
-The right choice depends on the environment. 
+Many different implementations of the MapReduce interface are possible. The right choice depends on the environment. 
 For example, one implementation may be suitable for a small shared-memory machine, 
 another for a large NUMA multi-processor, and yet another for an even larger collection of networked machines.
 #####
-MapReduce接口可以有很多种不同的实现方式。如何进行正确的选择取决于环境。  
-举个例子，某一种实现方式可能适合拥有较小共享内存的机器，而另一种实现方式则适用于大型的NUMA架构的多核处理器机器，还有的实现方式则更适用于基于网络的大型机器集群。
+MapReduce接口可以有很多不同的实现方式。具体哪一种更加合适则取决于具体的环境。  
+例如，某一种实现方式可能适合有着较小共享内存的机器，而另一种实现方式则适用于大型的NUMA架构的多核处理器机器，还有的实现方式则更适用于基于网络的大型机器集群。
 
 #####
 This section describes an implementation targeted to the computing environment in wide use at Google:
@@ -269,14 +267,13 @@ The file system uses replication to provide availability and reliability on top 
 (5) Users submit jobs to a scheduling system. Each job consists of a set of tasks,
 and is mapped by the scheduler to a set of available machines within a cluster.
 #####
-本章介绍一个针对谷歌内部广泛使用的计算环境下的(MapReduce)实现：通过交换式以太网互相连接起来的大型商用PC集群。  
+本章介绍的一个(MapReduce)实现是针对谷歌内部广泛使用的计算环境的：通过交换式以太网互相连接起来的大型商用PC集群。  
 在我们的环境中:  
-(1) 机器通常是运行linux操作系统的、x86架构的双处理器的平台，每台机器有2-4GB的内存。  
+(1) 机器通常是有着x86架构的双处理器的、运行linux操作系统的平台，每台机器有2-4GB的内存。  
 (2) 使用商用的网络硬件 - 通常每台机器的带宽为100M/s或者1GB/s，但其平均(实际使用的)带宽远小于整个网络带宽的一半。  
-(3) 一个集群由几百或几千的机器组成，因此机器故障是常见的。  
-(4) 存储是由直接连接到独立机器上的IDE硬盘提供的。存储在这些磁盘上的数据由一个内部自研的分布式文件系统来管理。
-这一文件系统采用复制机制，在不可靠的硬件之上实现可用性和可靠性。
-(5) 用户提交作业(job)给一个调度系统。每一个作业都由一系列的任务(task)组成，且任务由调度器映射(调度)到内部集群中的一组可用机器上执行。
+(3) 整个集群是由几百或几千台机器所组成的，因此机器故障是频繁出现的。  
+(4) 存储是由直接连接到独立机器上的IDE硬盘提供的。存储在这些磁盘上的数据由一个内部自研的分布式文件系统来管理。这一文件系统采用复制机制，旨在不可靠的硬件之上实现可用性和可靠性。  
+(5) 用户提交作业(job)给一个调度系统。每个作业都由一系列的任务(task)组成，任务被调度器映射到内部集群中的一组可用机器上去执行。
 
 ### 3.1 Execution Overview(执行概述)
 #####
@@ -285,10 +282,9 @@ The input splits can be processed in parallel by different machines.
 Reduce invocations are distributed by partitioning the intermediate key space into R pieces using a partitioning function (e.g., hash(key) mod R). 
 The number of partitions (R) and the partitioning function are specified by the user.
 #####
-通过将输入的数据自动分割为M份，map调用得以分布在多个机器上调用执行。  
-拆分后的输入数据可以被不同的机器并行的处理。  
+通过将输入的数据自动分割为M份，map调用得以分布在多个机器上调用执行。拆分后的输入数据可以被不同的机器并行的处理。  
 通过一个分区函数将中间态的key值空间划分为R份(例如: hash(key) mod R, 对key做hash后再对R求模)，Reduce调用也得以分布式的执行。  
-划分的个数(R)和分区函数都由用户来指定。
+分区的个数(R)和分区函数都由用户来指定。
 
 ![执行概述.png](figure1%20Execution_Overview.png)
 
@@ -328,28 +324,28 @@ When the user program calls the MapReduce function, the following sequence of ac
 #####
 图1展示了我们所实现的MapReduce操作中的总体流程。当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是一一对应的）:
 
-1. 内嵌于用户程序中的MapReduce库首先会将输入的文件拆分为M份，每份大小通常为16MB至64MB（具体的大小可以由用户通过可选参数来控制）。
+1. 内嵌于用户程序中的MapReduce库首先会将输入的文件拆分为M份，每份大小通常为16MB至64MB（具体的大小可以由用户通过可选参数来控制）。  
    随后便在集群中的一组机器上启动多个程序的副本。
 
-2. 其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。
-   这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。
+2. 其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。  
+   这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。  
 
-3. 一个被分配了map任务的worker，读取被拆分后的对应输入内容。
+3. 一个被分配了map任务的worker，读取被拆分后的对应输入内容。 
    从输入的数据中解析出key/value键值对，并将每一个kv对作为参数传递给用户自定义的map函数。 
-   map函数产生的中间态key/value键值对会被缓存在内存之中。
+   map函数产生的中间态key/value键值对会被缓存在内存之中。  
 
-4. 每隔一段时间，缓存在内存中的kv对会被写入本地磁盘，并被分区函数划分为R个区域。
+4. 每隔一段时间，缓存在内存中的kv对会被写入本地磁盘，并被分区函数划分为R个区域。  
    这些在本地磁盘上被缓冲的kv对的位置将会被回传给master，master负责将这些位置信息转发给后续执行reduce任务的worker。
 
-5. 当一个负责reduce任务的worker被master通知了这些位置信息(map任务生成的中间态kv对数据所在的磁盘信息)， 
-   该worker通过远过程调用(RPC)从负责map任务的worker机器的本地磁盘中读取被缓存的数据。
-   当一个负责reduce任务的worker已经读取了所有的中间态数据，将根据中间态kv对的key值进行排序，因此所有拥有相同key值的kv对将会被分组在一起。
-   需要排序的原因是因为通常很多不同的key(的kv对集合)会被映射到同一个reduce任务中去。如果(需要排序的)中间态的数据量过大，无法完全装进内存时，将会使用外排序。
+5. 当一个负责reduce任务的worker被master通知了这些位置信息(map任务生成的中间态kv对数据所在的磁盘信息)，  
+   该worker通过远过程调用(RPC)从负责map任务的worker机器的本地磁盘中读取被缓存的数据。  
+   当一个负责reduce任务的worker已经读取了所有的中间态数据，将根据中间态kv对的key值进行排序，因此所有拥有相同key值的kv对将会被分组在一起。  
+   需要排序的原因是因为通常很多不同的key(的kv对集合)会被映射到同一个reduce任务中去。如果(需要排序的)中间态的数据量过大，无法完全装进内存时，将会使用外排序。  
    
-6. 负责reduce任务的worker迭代所有被排好序的中间态数据，并将所遇到的每一个唯一的key值和其对应的中间态value值集合传递给用户自定义的reduce函数。
-   reduce函数所产生的输出将会追加在一个该reduce分区内的、最终的输出文件内。
+6. 负责reduce任务的worker迭代所有被排好序的中间态数据，并将所遇到的每一个唯一的key值和其对应的中间态value值集合传递给用户自定义的reduce函数。  
+   reduce函数所产生的输出将会追加在一个该reduce分区内的、最终的输出文件内。  
 
-7. 当所有的map任务和reduce任务都完成后，master将唤醒用户程序。此时，调用MapReduce的用户程序(的执行流)将会返回到用户代码中。
+7. 当所有的map任务和reduce任务都完成后，master将唤醒用户程序。此时，调用MapReduce的用户程序(的执行流)将会返回到用户代码中。  
 
 #####
 After successful completion, the output of the mapreduce execution is available in the R output files 
@@ -358,8 +354,7 @@ Typically, users do not need to combine these R output files into one file – t
 or use them from another distributed application that is able to deal with input that is partitioned into multiple files.
 #####
 在成功的完成后，MapReduce执行的输出结果将被存放在R个输出文件中(每一个reduce任务都对应一个输出文件，输出文件的名字由用户指定)。  
-通常，用户无需将这R个输出文件合并为一个文件 - 他们通常传递这些文件，将其作为另一个MapReduce调用的输入，  
-或者由另一个能处理多个被分割的输入文件的分布式应用使用。
+通常，用户无需将这R个输出文件合并为一个文件 - 他们通常传递这些文件，将其作为另一个MapReduce调用的输入，或者由另一个能处理多个被分割的输入文件的分布式应用使用。
 
 ### 3.2 Master Data Structures(Master数据结构)
 #####
@@ -376,7 +371,7 @@ The information is pushed incrementally to workers that have in-progress reduce 
 #####
 master是一个管道，将中间态文件的位置信息从map任务传递给reduce任务。  
 因此，对于每个已完成的map任务，master存储了由map任务生成的R个中间态文件区域的位置和大小。  
-当map任务完成时，master将更新接受到的(中间态文件区域)位置和大小信息。
+当map任务完成时，master将更新接受到的(中间态文件区域)位置和大小信息。  
 这些信息的变更会以增量的方式推送给运行中的reduce任务。
 
 ### 3.3 Fault Tolerance(容错)
@@ -422,7 +417,7 @@ MapReduce能从大范围的worker故障中迅速的恢复。
 例如，在一个MapReduce操作运行期间内，一个正在运行的集群上的一次网络维护导致了80台机器在几分钟内无法访问的。  
 MapReduce的master只需要将这些无法访问的机器上的任务重新的执行，然后继续向前推进，最终完成这个MapReduce操作。
 
-##### Master Failure(Master故障)
+### Master Failure(Master故障)
 #####
 It is easy to make the master write periodic checkpoints of the master data structures described above. 
 If the master task dies, a new copy can be started from the last checkpointed state. 
@@ -435,7 +430,7 @@ Clients can check for this condition and retry the MapReduce operation if they d
 然而，考虑到只有一台master机器，是不太可能出现故障的；因此如果master故障了，我们当前的实现会中止MapReduce计算。
 客户端可以检查master的这些状态，并根据需要重试MapReduce操作。
 
-##### Semantics in the Presence of Failures(面对故障时的语义)
+### Semantics in the Presence of Failures(面对故障时的语义)
 #####
 When the user-supplied map and reduce operators are deterministic functions of their input values, 
 our distributed implementation produces the same output as would have been produced 
@@ -513,7 +508,7 @@ id为bbb的worker机器上reduce任务的执行结果则是<Tom,2-bbb>, <name,2-
 上述的弱语义表示，无论出现了什么机器故障，虽然无法准确的得知结果到底是哪一个，但最终结果不是result_aaa就是result_bbb，反正一定是某一个reduce任务生成的完整输出数据，而绝不可能出现跨任务的数据重复、冗余、缺失等问题。
 )
 
-##### 3.4 Locality(局部性)
+### 3.4 Locality(局部性)
 ##### 
 Network bandwidth is a relatively scarce resource in our computing environment. 
 We conserve network bandwidth by taking advantage of the fact that the input data(managed by GFS) is stored on the local disks of the machines that make up our cluster. 
@@ -529,7 +524,7 @@ MapReduce的master调度map任务时将输入文件的位置信息考虑在内�
 如果任务失败了，调度map任务时会让执行任务的机器尽量靠近任务所需输入数据所在的机器(举个例子，被选中的worker机器与包含数据的机器位于同一网络交换机下)。  
 当集群中的相当一部分worker都在执行大型MapReduce操作时，绝大多数的输入数据都在本地读取从而不会消耗网络带宽。
 
-##### 3.5 Task Granularity(任务粒度)
+### 3.5 Task Granularity(任务粒度)
 #####
 We subdivide the map phase into M pieces and the reduce phase into R pieces, as described above. 
 Ideally,M and R should be much larger than the number of worker machines. 
@@ -561,7 +556,7 @@ We often perform MapReduce computations with M = 200,000 and R = 5,000, using 2,
 实际上，我们倾向于设置M的大小使得每个独立任务所需的输入数据大约在16MB至64MB之间(使得上文所述的局部性优化效果最好), 同时我们设置R的大小为我们预期使用worker机器数量的小几倍。  
 我们执行MapReduce计算时，通常使用2000台worker机器，并设置M的值为200000，R的值为5000。
 
-##### 3.6 Backup Tasks(后备任务)
+### 3.6 Backup Tasks(后备任务)
 #####
 One of the common causes that lengthens the total time taken for a MapReduce operation is a “straggler”:
 a machine that takes an unusually long time to complete one of the last few map or reduce tasks in the computation.
@@ -601,7 +596,7 @@ These are described in this section.
 尽管已提供的编写简单Map和Reduce函数的功能能满足大多数需求，但我们还发现了一些有价值的拓展。
 本章节将对此进行介绍。
 
-##### 4.1 Partitioning Function(分区函数)
+### 4.1 Partitioning Function(分区函数)
 #####
 The users of MapReduce specify the number of reduce tasks/output files that they desire (R). 
 Data gets partitioned across these tasks using a partitioning function on the intermediate key. 
@@ -621,7 +616,7 @@ MapReduce用户期望能指定reduce任务/输出文件的数量。
 为了支持这种场景，MapReduce库的用户可以提供一个自定义的分区函数。  
 举个例子，使用“hash(Hostname(urlkey)) mod R”作为分区函数，就可以使得来自同一个主机的所有URL(条目)最终都写入同一个输出文件中。
 
-##### 4.2 Ordering Guarantees(有序性保证)
+### 4.2 Ordering Guarantees(有序性保证)
 #####
 We guarantee that within a given partition, the intermediate key/value pairs are processed in increasing key order.
 This ordering guarantee makes it easy to generate a sorted output file per partition,
@@ -632,7 +627,7 @@ or users of the output find it convenient to have the data sorted.
 这一有序性保证使得能简单的为每个分区生成一个已排序的输出文件，
 当输出文件的格式需要支持基于key来进行高效随机查找时(这一机制)会很有价值,或者用户需要已经排好序的数据时会很方便。
 
-##### 4.3 Combiner Function(组合器函数)
+### 4.3 Combiner Function(组合器函数)
 #####
 In some cases, there is significant repetition in the intermediate keys produced by each map task, 
 and the user-specified Reduce function is commutative and associative. 
@@ -667,7 +662,7 @@ Appendix A contains an example that uses a combiner.
 部分合并可以明显加快某些MapReduce操作的速度。
 附录A中包含了一个使用combiner的例子。
 
-##### 4.4 Input and Output Types(输入和输出的类型)
+### 4.4 Input and Output Types(输入和输出的类型)
 ##### 
 The MapReduce library provides support for reading input data in several different formats.
 For example, “text” mode input treats each line as a key/value pair: the key is the offset in the file and the value is the contents of the line.
@@ -697,7 +692,7 @@ and it is easy for user code to add support for new output types.
 #####
 类似的，我们也支持多种不同格式的输出数据，且用户代码中可以轻松地支持新增的一种新输出类型。
 
-##### 4.5 Side-effects(副作用)
+### 4.5 Side-effects(副作用)
 #####
 In some cases, users of MapReduce have found it convenient to produce auxiliary files as additional outputs from their map and/or reduce operators. 
 We rely on the application writer to make such side-effects atomic and idempotent. 
@@ -716,7 +711,7 @@ This restriction has never been an issue in practice.
 因此，会生成多个输出文件且具有跨文件一致性需求的任务应该是确定性的（任务是确定性函数算子）。
 在我们的实践中，这一限制并没有带来什么问题。
 
-##### 4.6 Skipping Bad Records(跳过错误的记录)
+### 4.6 Skipping Bad Records(跳过错误的记录)
 #####
 Sometimes there are bugs in user code that cause the Map or Reduce functions to crash deterministically on certain records. 
 Such bugs prevent a MapReduce operation from completing. 
@@ -741,7 +736,7 @@ When the master has seen more than one failure on a particular record, it indica
 如果用户代码产生了一个信号，则信号处理器将会向MapReduce的master发送一个包含了(该参数)序列号的"最后喘息(last gasp)"UDP包。  
 当master一个特定的记录不止一次的导致故障时，master会指示对应的Map或Reduce任务在下一次重新执行时应该跳过该记录。
 
-##### 4.7 Local Execution(本地执行)
+### 4.7 Local Execution(本地执行)
 #####
 Debugging problems in Map or Reduce functions can be tricky, since the actual computation happens in a distributed system, 
 often on several thousand machines, with work assignment decisions made dynamically by the master. 
@@ -755,7 +750,7 @@ Users invoke their program with a special flag and can then easily use any debug
 控制权被交给了用户,使得计算可以被限制在指定的Map任务中。  
 用户通过一个特殊的标志来调用他们的程序，然后可以轻松地使用任何他们觉得好用的调试或者测试工具(例如：gdb)。
 
-##### 4.8 Status Information(状态信息)
+### 4.8 Status Information(状态信息)
 #####
 The master runs an internal HTTP server and exports a set of status pages for human consumption. 
 The status pages show the progress of the computation, such as how many tasks have been completed, 
@@ -777,7 +772,7 @@ This information is useful when attempting to diagnose bugs in the user code.
 此外，高级状态页展示了哪些worker机器发生了故障，以及哪些map和reduce任务在执行时发生了故障。  
 在尝试调试用户代码中的bug时这些信息会很有用。
 
-##### 4.9 Counters(计数器)
+### 4.9 Counters(计数器)
 #####
 The MapReduce library provides a counter facility to count occurrences of various events. 
 For example, user code may want to count total number of words processed or the number of German documents indexed, etc.
@@ -829,7 +824,7 @@ or that the fraction of German documents processed is within some tolerable frac
 用户发现计数器功能能很好的用于检查MapReduce操作的行为是否正常。  
 例如，在某些MapReduce操作中，用户代码想要确保已生成的k/v对数量严格等于已处理的输入k/v对数量，或者确保已处理的德语文档数量在已处理的全部文档中的占比是否处于一个可接受的比例内。
 
-##### 5 Performance(性能)
+### 5 Performance(性能)
 #####
 In this section we measure the performance of MapReduce on two computations running on a large cluster of machines. 
 One computation searches through approximately one terabyte of data looking for a particular pattern. 
@@ -846,7 +841,7 @@ and another class extracts a small amount of interesting data from a large data 
 #####
 上述两个程序代表了现实中大多数MapReduce用户所编写的程序，一类程序将数据从一种表示方式转化为另一种表示方式，而另一类程序则从一个大的数据集中提取出少量感兴趣的数据。
 
-##### 5.1 Cluster Configuration(集群配置)
+### 5.1 Cluster Configuration(集群配置)
 #####
 All of the programs were executed on a cluster that consisted of approximately 1800 machines. 
 Each machine had two 2GHz Intel Xeon processors with Hyper-Threading enabled, 4GB of memory, two 160GB IDE disks, and a gigabit Ethernet link. 
@@ -866,7 +861,7 @@ The programs were executed on a weekend afternoon, when the CPUs, disks, and net
 在4GB的内存中，大约1-1.5GB的内存是为集群上要运行的其它任务而保留的。  
 任务是在周末的下午执行的，(因为)这个时间点CPU、硬盘和网络一般都是空闲的。  
 
-##### 5.2 Grep(Globally search a Regular Expression and Print 基于正则表达式的全局搜索并打印)
+### 5.2 Grep(Globally search a Regular Expression and Print 基于正则表达式的全局搜索并打印)
 #####
 The grep program scans through 10^10 100-byte records, searching for a relatively rare three-character pattern (the pattern occurs in 92,337 records).
 The input is split into approximately 64MB pieces (M = 15000), and the entire output is placed in one file (R = 1).
@@ -894,7 +889,7 @@ Y轴标识着扫描输入数据的速率。
 这其中包括了一分钟左右的启动开销。
 这一开销是由于需要将程序分发到所有的worker机器上，以及为了打开1000个输入文件集合而与GFS交互并获得局部性优化信息的延迟。
 
-##### 5.3 Sort(排序)
+### 5.3 Sort(排序)
 #####
 The sort program sorts 10^10 100-byte records (approximately 1 terabyte of data). 
 This program is modeled after the TeraSort benchmark.
@@ -991,7 +986,7 @@ Network bandwidth requirements for writing data would be reduced if the underlyi
   我们写入两个备份的原因在于这是我们底层文件系统所提供的可靠性和可用性的机制。
 * 如果底层文件系统使用纠错码(Erasure Coding)来代替复制(来保证可靠性)，则需要写入数据时所需要的网络带宽将减少很多。
 
-##### 5.4 Effect of Backup Tasks(后备任务的影响)
+### 5.4 Effect of Backup Tasks(后备任务的影响)
 #####
 In Figure 3 (b), we show an execution of the sort program with backup tasks disabled. 
 The execution flow is similar to that shown in Figure 3 (a), except that there is a very long tail where hardly any write activity occurs.
@@ -1004,7 +999,7 @@ The entire computation takes 1283 seconds, an increase of 44% in elapsed time.
 在960s后，除了5个reduce任务外其它任务都已经完成。
 然而最后几个“落伍者”任务直到300秒后才相继完成。整个计算过程共花费了1283秒，(相比正常执行的情况)增加了44%的耗时。
 
-##### 5.5 Machine Failures(机器故障)
+### 5.5 Machine Failures(机器故障)
 #####
 In Figure 3 (c), we show an execution of the sort program 
 where we intentionally killed 200 out of 1746 worker processes several minutes into the computation. 
@@ -1072,7 +1067,7 @@ In Table 1, we show some statistics for a subset of MapReduce jobs run at Google
 在每个job完成时，MapReduce库会以日志的形式记录对应job所使用的计算资源的统计信息。  
 在表1中，我们展示了谷歌在2004年8月所运行的MapReduce job的一个子集的(所使用计算资源的)一些统计信息。
 
-##### 6.1 Large-Scale Indexing(大规模索引)
+### 6.1 Large-Scale Indexing(大规模索引)
 #####
 One of our most significant uses of MapReduce to date has been a complete rewrite 
 of the production indexing system that produces the data structures used for the Google web search service. 
@@ -1262,3 +1257,96 @@ Mike Burrows, Wilson Hsieh, Josh Levenberg, Sharon Perl, Rob Pike, and Debby Wal
 The anonymous OSDI reviewers, and our shepherd, Eric Brewer, provided many useful suggestions of areas where the paper could be improved. 
 Finally, we thank all the users of MapReduce within Google’s engineering organization 
 for providing helpful feedback, suggestions, and bug reports.
+#####
+Josh Levenberg基于他使用MapReduce的经验以及其它人提出的优化建议，在修改MapReduce的用户级API和为其拓展很多新特性的过程中发挥了重要作用。  
+MapReduce是基于谷歌文件系统GFS读取输入数据和写出输出数据的。
+我们要感谢Mohit Aron、Howard Gobioff、Markus Gutschke、David Kramer、Shun Tak Leung和Josh Redstone为开发GFS所做的工作。
+我们也要感谢Percy Liang和Olcan Sercinoglu为开发MapReduce集群管理系统所做的工作。  
+Mike Burrows, Wilson Hsieh, Josh Levenberg, Sharon Perl, Rob Pike和Debby Wallach为这篇论文的前期草稿提供了很有帮助的建议。  
+匿名的OSDI评论员和我们的审核者Eric Brewer就论文可以改进的方面提供了许多有用的建议。  
+最后，我们感谢谷歌工程部的所有MapReduce用户，感谢他们提供的有价值的反馈、建议和bug报告。
+
+### A Word Frequency(一个单词频率统计程序)
+#####
+This section contains a program that counts the number of occurrences of each unique word in a set of input files specified on the command line.
+#####
+这一章节包含了一个程序，用于计算由命令行指定的一组输入文件集合中每个唯一单词的出现次数。
+```
+#include "mapreduce/mapreduce.h"
+// User’s map function 
+class WordCounter : public Mapper { 
+    public: virtual void Map(const MapInput& input) { 
+        const string& text = input.value(); const int n = text.size(); for (int i = 0; i < n; ) { 
+            // Skip past leading whitespace 
+            while ((i < n) && isspace(text[i])) 
+               i++;
+            // Find word end 
+            int start = i; 
+            while ((i < n) && !isspace(text[i]))
+               i++;
+            if (start < i) 
+               Emit(text.substr(start,i-start),"1");
+        }
+    }
+};   
+
+
+REGISTER_MAPPER(WordCounter);
+// User’s reduce function 
+class Adder : public Reducer { 
+    virtual void Reduce(ReduceInput* input) { 
+        // Iterate over all entries with the 
+        // same key and add the values 
+        int64 value = 0; 
+        while (!input->done()) { 
+            value += StringToInt(input->value()); 
+            input->NextValue();
+        }
+        // Emit sum for input->key() 
+        Emit(IntToString(value));
+    }
+};
+
+REGISTER_REDUCER(Adder);
+int main(int argc, char** argv) { 
+    ParseCommandLineFlags(argc, argv);
+    MapReduceSpecification spec;
+    // Store list of input files into "spec" 
+    for (int i = 1; i < argc; i++) { 
+        MapReduceInput* input = spec.add_input(); 
+        input->set_format("text"); 
+        input->set_filepattern(argv[i]); 
+        input->set_mapper_class("WordCounter");
+    }
+    // Specify the output files: 
+    // /gfs/test/freq-00000-of-00100 
+    // /gfs/test/freq-00001-of-00100 
+    // ... 
+    MapReduceOutput* out = spec.output();
+    out->set_filebase("/gfs/test/freq"); 
+    out->set_num_tasks(100); 
+    out->set_format("text"); 
+    out->set_reducer_class("Adder");
+    // Optional: do partial sums within map 
+    // tasks to save network bandwidth 
+    out->set_combiner_class("Adder");
+
+
+    // Tuning parameters: use at most 2000 
+    // machines and 100 MB of memory per task 
+
+    spec.set_machines(2000); 
+    spec.set_map_megabytes(100); 
+    spec.set_reduce_megabytes(100);
+
+    // Now run it 
+    MapReduceResult result; 
+    if (!MapReduce(spec, &result)) abort();
+
+    // Done: ’result’ structure contains info
+    // about counters, time taken, number of 
+    // machines used, etc.
+    return 0;
+}
+```
+

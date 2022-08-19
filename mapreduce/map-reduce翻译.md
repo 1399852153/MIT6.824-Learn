@@ -11,7 +11,7 @@ Many real world tasks are expressible in this model, as shown in the paper.
 #####
 MapReduce是一个关于实施大型数据集处理和生成的编程模型。  
 用户指定一个用于处理**k/v对**并生成**中间态k/v对集合**的映射（map）函数，以及一个用于合并所有具有相同中间态key的中间态value值的归约（reduce）函数。  
-很多现实世界中的任务都可以通过该模型（MapReduce）表达，在后续的论文中将会展示这一点。  
+正如本篇论文所展示的那样，很多现实世界中的任务都可以通过该模型（MapReduce）表达。  
 
 #####
 Programs written in this functional style are automatically parallelized and executed on a large cluster of commodity machines. 
@@ -21,7 +21,7 @@ and managing the required inter-machine communication.
 This allows programmers without any experience with parallel and distributed systems 
 to easily utilize the resources of a large distributed system.
 #####
-以这种函数式风格编写的程序可以在一个大型的商用机器集群中自动、并行的执行。  
+以这种函数式风格编写的程序可以在一个大型的商品级(译者小熊餐馆注：意思是很廉价、性能也很一般的意思，下同)机器集群中自动、并行的执行。  
 该系统在运行时会关注如下细节：输入数据的分割，在一系列机器间跨机器的调度程序的执行，机器故障的处理以及管理集群内机器间的必要通信。  
 这（使用MapReduce）使得没有任何并行计算、分布式系统经验的程序员们都可以轻松利用大型分布式系统中的资源。
 
@@ -31,7 +31,7 @@ a typical MapReduce computation processes many terabytes of data on thousands of
 Programmers find the system easy to use: hundreds of MapReduce programs have been implemented 
 and upwards of one thousand MapReduce jobs are executed on Google’s clusters every day.
 #####
-我们已实现的MapReduce运行在一个大型商用机器集群上，而且具有高度的可拓展性：一个典型的MapReduce计算可以在数千台机器上处理TB级别的数据。  
+我们已实现的MapReduce运行在一个大型商品级机器集群上，而且具有高度的可拓展性：一个典型的MapReduce计算可以在数千台机器上处理TB级别的数据。  
 程序员们发现系统很容易使用：已经有数以百计的MapReduce程序被实现，并且每天都有一千以上的MapReduce任务运行在谷歌的（计算机）集群中。
 
 ### 1 Introduction（介绍）
@@ -71,7 +71,7 @@ and distribution of large-scale computations,
 combined with an implementation of this interface that achieves high performance on large clusters of commodity PCs.
 #####
 这项工作的主要贡献在于提供了一个简单且强大的接口，该接口能够使大规模计算自动地并行化和分布式的执行。  
-结合该接口的实现，得以在大型的商用PC集群中获得很高的性能。
+结合该接口的实现，得以在大型的商品级PC集群中获得很高的性能。
 
 #####
 Section 2 describes the basic programming model and gives several examples. 
@@ -267,10 +267,10 @@ The file system uses replication to provide availability and reliability on top 
 (5) Users submit jobs to a scheduling system. Each job consists of a set of tasks,
 and is mapped by the scheduler to a set of available machines within a cluster.
 #####
-本章介绍的一个(MapReduce)实现是针对谷歌内部广泛使用的计算环境的：通过交换式以太网互相连接起来的大型商用PC集群。  
+本章介绍的一个(MapReduce)实现是针对谷歌内部广泛使用的计算环境的：通过交换式以太网互相连接起来的大型商品级PC集群。  
 在我们的环境中:  
 (1) 机器通常是有着x86架构的双处理器的、运行linux操作系统的平台，每台机器有2-4GB的内存。  
-(2) 使用商用的网络硬件 - 通常每台机器的带宽为100M/s或者1GB/s，但其平均(实际使用的)带宽远小于整个网络带宽的一半。  
+(2) 使用商品级的网络硬件 - 通常每台机器的带宽为100M/s或者1GB/s，但其平均(实际使用的)带宽远小于整个网络带宽的一半。  
 (3) 整个集群是由几百或几千台机器所组成的，因此机器故障是频繁出现的。  
 (4) 存储是由直接连接到独立机器上的IDE硬盘提供的。存储在这些磁盘上的数据由一个内部自研的分布式文件系统来管理。这一文件系统采用复制机制，旨在不可靠的硬件之上实现可用性和可靠性。  
 (5) 用户提交作业(job)给一个调度系统。每个作业都由一系列的任务(task)组成，任务被调度器映射到内部集群中的一组可用机器上去执行。

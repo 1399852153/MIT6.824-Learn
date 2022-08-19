@@ -719,7 +719,7 @@ The usual course of action is to fix the bug, but sometimes this is not feasible
 Also, sometimes it is acceptable to ignore a few records, for example when doing statistical analysis on a large data set. 
 We provide an optional mode of execution where the MapReduce library detects which records cause deterministic crashes and skips these records in order to make forward progress.
 #####
-又是用户的代码中存在一些bug，造成了Map或Reduce函数在处理某些数据时必定崩溃。  
+有时用户的代码中存在一些bug，造成了Map或Reduce函数在处理某些数据时必定崩溃。  
 这些bug会阻止MapReduce操作的完成。  
 通常的做法是修复这个bug，但有时这是行不通的；可能这个bug是位于三方库中，且无法获得其源代码的。  
 当然，有时忽略掉少量的数据是可以接受的，比如对一个大型数据集上进行统计分析时。  

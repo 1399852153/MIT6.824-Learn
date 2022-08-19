@@ -322,19 +322,19 @@ When the user program calls the MapReduce function, the following sequence of ac
 7. When all map tasks and reduce tasks have been completed, the master wakes up the user program.
    At this point, the MapReduce call in the user program returns back to the user code.
 #####
-图1展示了我们所实现的MapReduce操作中的总体流程。当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是一一对应的）:
+图1展示了我们所实现的MapReduce操作的总体流程。当用户程序调用MapReduce函数时，会发生以下的一系列动作（图1中的数字标号与以下列表中的数字是对应的）:
 
 1. 内嵌于用户程序中的MapReduce库首先会将输入的文件拆分为M份，每份大小通常为16MB至64MB（具体的大小可以由用户通过可选参数来控制）。  
-   随后便在集群中的一组机器上启动多个程序的副本。
+   然后便在集群中的一组机器上启动多个程序的副本。
 
-2. 其中一个程序的副本是特殊的-即master(主人)。剩下的程序副本都是worker(工作者),worker由master来分配任务。  
+2. 其中一个程序的副本是特殊的-即master。剩下的程序副本都是worker, worker由master来分配任务。  
    这里有M个map任务和R个reduce任务需要分配。master选择空闲的worker，并且为每一个被选中的worker分配一个map任务或一个reduce任务。  
 
 3. 一个被分配了map任务的worker，读取被拆分后的对应输入内容。 
    从输入的数据中解析出key/value键值对，并将每一个kv对作为参数传递给用户自定义的map函数。 
    map函数产生的中间态key/value键值对会被缓存在内存之中。  
 
-4. 每隔一段时间，缓存在内存中的kv对会被写入本地磁盘，并被分区函数划分为R个区域。  
+4. 缓存在内存中的kv对会被周期性地写入通过分区函数所划分出的R个磁盘区域内。  
    这些在本地磁盘上被缓冲的kv对的位置将会被回传给master，master负责将这些位置信息转发给后续执行reduce任务的worker。
 
 5. 当一个负责reduce任务的worker被master通知了这些位置信息(map任务生成的中间态kv对数据所在的磁盘信息)，  
@@ -353,8 +353,8 @@ After successful completion, the output of the mapreduce execution is available 
 Typically, users do not need to combine these R output files into one file – they often pass these files as input to another MapReduce call, 
 or use them from another distributed application that is able to deal with input that is partitioned into multiple files.
 #####
-在成功的完成后，MapReduce执行的输出结果将被存放在R个输出文件中(每一个reduce任务都对应一个输出文件，输出文件的名字由用户指定)。  
-通常，用户无需将这R个输出文件合并为一个文件 - 他们通常传递这些文件，将其作为另一个MapReduce调用的输入，或者由另一个能处理多个被分割的输入文件的分布式应用使用。
+在成功的完成计算后，MapReduce执行的输出结果将被存放在R个输出文件中(每一个reduce任务都对应一个输出文件，输出文件的名字由用户指定)。  
+通常，用户无需将这R个输出文件合并为一个文件 - 他们通常传递这些文件，将其作为另一个MapReduce调用的输入，或者由另一个能处理多个被分割的输入文件的分布式应用所使用。
 
 ### 3.2 Master Data Structures(Master数据结构)
 #####

@@ -286,7 +286,7 @@ The number of partitions (R) and the partitioning function are specified by the 
 通过一个分区函数将中间态的key值空间划分为R份(例如: hash(key) mod R, 对key做hash后再对R求模)，Reduce调用也得以分布式的执行。  
 分区的个数(R)和分区函数都由用户来指定。
 
-![执行概述.png](figure1%20Execution_Overview.png)
+![执行概述.png](figure1_Execution_Overview.png)
 
 #####
 Figure 1 shows the overall flow of a MapReduce operation in our implementation. 
@@ -852,7 +852,7 @@ The input is split into approximately 64MB pieces (M = 15000), and the entire ou
 grep程序扫描通过扫描10^10个100字节大小的记录，搜索一个相对比较少见的3字符模式(这个模式只出现在92337条记录中)。  
 输入数据被分割为大约64MB大小的块(M = 15000)，并且完整的输出被放在了一个文件中(R = 1)。
 
-![Figure 2：Data transfer rate over time.png](figure2 Data transfer rate over time.png)
+![Figure 2：Data transfer rate over time.png](figure2_Data_transfer_rate_over_time.png)
 
 #####
 Figure 2 shows the progress of the computation over time. 
@@ -910,7 +910,7 @@ that would collect a sample of the keys and use the distribution of the sampled 
 #####
 我们的基准测试中内置的分区函数是了解key值具体分布的。
 在一个常规的排序程序中，我们会预先插入一个MapReduce操作，该操作将会收集key值的一个样本并且基于key值样本的分布情况来计算最终排序时需要的分割点。
-![figure3 Data transfer rates over time for different executions of the sort program.png](figure3 Data transfer rates over time for different executions of the sort program.png)
+![figure3 Data transfer rates over time for different executions of the sort program.png](figure3_Data_transfer_rates_over_time_for_different_executions_of_the_sort_program.png)
 
 #####
 Figure 3 (a) shows the progress of a normal execution of the sort program. 
@@ -1026,9 +1026,9 @@ MapReduce库已在谷歌内的许多领域中被广泛的使用，其中包括�
 * 大规模的图计算
 
 #####
-![Figure 4: MapReduce instances over time](Figure%204%20MapReduce%20instances%20over%20time.png)
+![Figure 4: MapReduce instances over time](figure4_MapReduce_instances_over_time.png)
 #####
-![Table 1: MapReduce jobs run in August 2004.png](Table 1: MapReduce jobs run in August 2004.png)
+![Table 1: MapReduce jobs run in August 2004.png](Table1_MapReduce_jobs_run_in_August_2004.png)
 
 #####
 Figure 4 shows the significant growth in the number of separate MapReduce programs 

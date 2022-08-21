@@ -489,24 +489,8 @@ and e(R2) may have read the output produced by a different execution of M.
 考虑下目前有一个map任务M和两个reduce任务R1和R2。 
 假设e(Ri)代表Ri任务已经被提交的一次执行(恰好只执行一次)。
 由于e(R1)可能在一次执行中读取M任务产生的输出，同时e(R2)可能会在另一次执行中读取M任务产生的输出，此时将会出现弱语义。
-
-##### 
-(译者小熊餐馆注：
-上面这段内容比较晦涩，这里根据我举个简单的例子来帮助大家理解。  
-假设有一段话：“Your name is Tom? My name is Tom, too.”，原始需求是想利用MapReduce计算统计分词后每个单词出现的次数(例子里句子很短是为了描述，实际上可以是海量的文档)。  
-我们自定义的Map函数是确定性的函数算子，输入这个字符串进行Map操作后总是会返回以下9个kv对(key是单词，value是出现的次数): <Your,1>, <name,1>, <is,1>, <Tom,1>, <My,1>, <name,1>, <is,1>, <Tom,1>, <too,1>。
-无论Map函数是单机单线程顺序执行，还是在集群中并行的执行，结果都是明确不变的，也就是上述的强语义的概念。  
-MapReduce库会把Key相同的kv对进行分组，并将其传递给我们自定义的reduce函数，下面是分组后会传给reduce函数算子的参数：  
-<Tom,list(1,1)>, <name,list(1,1)>, <is,list(1,1)>, <Your,list(1)>, <My,list(1)>, <too,list(1)>。   
-在原始需求下，当map函数计算的结果不变时，无论reduce函数算子何时执行，也无论出现故障重复执行了几次，得到的结果一定和单机单线程顺序执行相同，这也是强语义。
-结果：<Tom,2>, <name,2>, <is,2>, <Your,1>, <My,1>, <too,1>。 (key为单词，value为出现的次数)
-而如果改变原始需求，除了累加单词总共出现的次数还要返回reduce计算时的当前机器id。  
-那么此时的reduce函数就属于不确定的函数算子了，因为即使输入相同，但每一次的执行获得的结果都不一定相等（调度到不同机器上执行，机器id不同，输出的结果也就不同）。
-假设有两台reduce任务worker，id分别为aaa和bbb。  
-id为aaa的worker机器上reduce任务的执行结果就是<Tom,2-aaa>, <name,2-aaa>, <is,2-aaa>, <Your,1-aaa>, <My,1-aaa>, <too,1-aaa>,是为结果result_aaa。  
-id为bbb的worker机器上reduce任务的执行结果则是<Tom,2-bbb>, <name,2-bbb>, <is,2-bbb>, <Your,1-bbb>, <My,1-bbb>, <too,1-bbb>,是为结果result_bbb。  
-上述的弱语义表示，无论出现了什么机器故障，虽然无法准确的得知结果到底是哪一个，但最终结果不是result_aaa就是result_bbb，反正一定是某一个reduce任务生成的完整输出数据，而绝不可能出现跨任务的数据重复、冗余、缺失等问题。
-)
+#####
+<a href="#info">针对MapReduce强语义、弱语义概念译者自己的理解</a>
 
 ### 3.4 Locality(局部性)
 ##### 
@@ -1348,4 +1332,21 @@ int main(int argc, char** argv) {
     return 0;
 }
 ```
-
+<a id="info"></a>
+##### 针对MapReduce强语义、弱语义概念译者自己的理解
+(译者小熊餐馆注：
+上面这段内容比较晦涩，这里根据我举个简单的例子来帮助大家理解。  
+假设有一段话：“Your name is Tom? My name is Tom, too.”，原始需求是想利用MapReduce计算统计分词后每个单词出现的次数(例子里句子很短是为了描述，实际上可以是海量的文档)。  
+我们自定义的Map函数是确定性的函数算子，输入这个字符串进行Map操作后总是会返回以下9个kv对(key是单词，value是出现的次数): <Your,1>, <name,1>, <is,1>, <Tom,1>, <My,1>, <name,1>, <is,1>, <Tom,1>, <too,1>。
+无论Map函数是单机单线程顺序执行，还是在集群中并行的执行，结果都是明确不变的，也就是上述的强语义的概念。  
+MapReduce库会把Key相同的kv对进行分组，并将其传递给我们自定义的reduce函数，下面是分组后会传给reduce函数算子的参数：  
+<Tom,list(1,1)>, <name,list(1,1)>, <is,list(1,1)>, <Your,list(1)>, <My,list(1)>, <too,list(1)>。   
+在原始需求下，当map函数计算的结果不变时，无论reduce函数算子何时执行，也无论出现故障重复执行了几次，得到的结果一定和单机单线程顺序执行相同，这也是强语义。
+结果：<Tom,2>, <name,2>, <is,2>, <Your,1>, <My,1>, <too,1>。 (key为单词，value为出现的次数)
+而如果改变原始需求，除了累加单词总共出现的次数还要返回reduce计算时的当前机器id。  
+那么此时的reduce函数就属于不确定的函数算子了，因为即使输入相同，但每一次的执行获得的结果都不一定相等（调度到不同机器上执行，机器id不同，输出的结果也就不同）。
+假设有两台reduce任务worker，id分别为aaa和bbb。  
+id为aaa的worker机器上reduce任务的执行结果就是<Tom,2-aaa>, <name,2-aaa>, <is,2-aaa>, <Your,1-aaa>, <My,1-aaa>, <too,1-aaa>,是为结果result_aaa。  
+id为bbb的worker机器上reduce任务的执行结果则是<Tom,2-bbb>, <name,2-bbb>, <is,2-bbb>, <Your,1-bbb>, <My,1-bbb>, <too,1-bbb>,是为结果result_bbb。  
+上述的弱语义表示，无论出现了什么机器故障，虽然无法准确的得知结果到底是哪一个，但最终结果不是result_aaa就是result_bbb，反正一定是某一个reduce任务生成的完整输出数据，而绝不可能出现跨任务的数据重复、冗余、缺失等问题。
+)

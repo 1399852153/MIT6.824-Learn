@@ -515,7 +515,7 @@ Ideally,M and R should be much larger than the number of worker machines.
 Having each worker perform many different tasks improves dynamic load balancing, and also speeds up recovery when a worker fails: 
 the many map tasks it has completed can be spread out across all the other worker machines.
 #####
-如上所处，我们将map阶段的任务拆分为M份，同时将reduce阶段的任务拆分为R份。  
+如上所述，我们将map阶段的任务拆分为M份，同时将reduce阶段的任务拆分为R份。  
 理想情况下，M和R的值都应该远大于worker机器的数量。  
 让每一个worker执行很多不同的任务可以提高动态负载均衡的效率，
 同时也能加快当一个worker故障时的恢复速度：（故障worker机器上）很多已经完成的map任务可以分散到所有其它的worker机器上去(重新执行)。
@@ -657,7 +657,7 @@ Users can add support for a new input type by providing an implementation of a s
 though most users just use one of a small number of predefined input types.
 #####
 MapReduce库为多种不同格式输入数据的读取提供了支持。  
-例如。"文本"模式下将每一行的输入视为一个kv键值对：key是该行在文件中的偏移量，而value是该行的内容。  
+例如，"文本"模式下将每一行的输入视为一个kv键值对：key是该行在文件中的偏移量，而value是该行的内容。  
 另一种所支持的常用格式则存储基于key排序的一连串kv键值对。 
 每一个输入类型的实现知道如何将输入的数据划分为有意义的区间，用以在一个独立的map任务中处理。
 (举个例子，文本模式划分区间时确保了只会在每一行的边界上出现区间的划分)  
@@ -752,7 +752,7 @@ master机器运行了一个内置地Http服务器，并提供了一系列地状�
 In addition, the top-level status page shows which workers have failed, and which map and reduce tasks they were processing when they failed. 
 This information is useful when attempting to diagnose bugs in the user code.
 #####
-此外，高级状态页展示了哪些worker机器发生了故障，以及哪些map和reduce任务在执行时发生了故障。  
+此外，高级状态页面展示了哪些worker机器发生了故障，以及哪些map和reduce任务在执行时发生了故障。  
 在尝试调试用户代码中的bug时这些信息会很有用。
 
 ### 4.9 Counters(计数器)

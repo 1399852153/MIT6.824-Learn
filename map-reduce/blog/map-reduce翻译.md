@@ -384,7 +384,7 @@ the library must tolerate machine failures gracefully.
 ##### Worker Failure(Worker故障)
 #####
 The master pings every worker periodically.
-If no response is received from a worker in a certain amount of time, the master marks the worker as failed.
+If no response is received from a worker in a certain amount of time, th e master marks the worker as failed.
 Any map tasks completed by the worker are reset back to their initial idle state,
 and therefore become eligible for scheduling on other workers.
 Similarly, any map task or reduce task in progress on a failed worker is also reset to idle and becomes eligible for rescheduling.

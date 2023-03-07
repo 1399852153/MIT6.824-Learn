@@ -1,0 +1,70 @@
+package mapreduce.rpc.model;
+
+public class DoReduceParam {
+
+    /**
+     * 需要执行的reduce函数名(本来最好的是传递一个脚本，但简单起见就指定函数名吧)
+     * 格式：类全名#方法名
+     * */
+    private String reduceFnName;
+
+    /**
+     * 所属job的名字
+     * */
+    private String jobName;
+
+    /**
+     * 当前reduce任务的id
+     * */
+    private String reduceTaskId;
+
+    /**
+     * 设定的map分片数量
+     * */
+    private Integer mapNum;
+
+    /**
+     * reduce结果输出文件的路径
+     * */
+    private String outputFilePath;
+
+    public String getReduceFnName() {
+        return reduceFnName;
+    }
+
+    public void setReduceFnName(String reduceFnName) {
+        this.reduceFnName = reduceFnName;
+    }
+
+    public String getJobName() {
+        return jobName;
+    }
+
+    public void setJobName(String jobName) {
+        this.jobName = jobName;
+    }
+
+    public String getReduceTaskId() {
+        return reduceTaskId;
+    }
+
+    public void setReduceTaskId(String reduceTaskId) {
+        this.reduceTaskId = reduceTaskId;
+    }
+
+    public Integer getMapNum() {
+        return mapNum;
+    }
+
+    public void setMapNum(Integer mapNum) {
+        this.mapNum = mapNum;
+    }
+
+    public String getOutputFilePath() {
+        return outputFilePath;
+    }
+
+    public void setOutputFilePath(String outputFilePath) {
+        this.outputFilePath = outputFilePath;
+    }
+}

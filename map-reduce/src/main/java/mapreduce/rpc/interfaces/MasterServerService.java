@@ -3,7 +3,7 @@ package mapreduce.rpc.interfaces;
 import mapreduce.rpc.model.RegisterWorkerParam;
 import mapreduce.rpc.model.ReportTaskExecuteResultParam;
 
-public interface MasterServer {
+public interface MasterServerService {
 
     /**
      * 注册worker

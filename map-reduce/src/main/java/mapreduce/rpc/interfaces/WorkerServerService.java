@@ -3,7 +3,7 @@ package mapreduce.rpc.interfaces;
 import mapreduce.rpc.model.DoMapParam;
 import mapreduce.rpc.model.DoReduceParam;
 
-public interface WorkerServer {
+public interface WorkerServerService {
 
     /**
      * 心跳检查

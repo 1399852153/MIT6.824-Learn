@@ -3,8 +3,8 @@ package mapreduce.rpc.model;
 public class DoMapParam {
 
     /**
-     * 需要执行的map函数名(本来最好的是传递一个脚本，但简单起见就指定函数名吧)
-     * 格式：类全名#方法名
+     * 需要执行的map实现类名(本来最好的是传递一个脚本，但简单起见就指定函数名，本地依赖接口实现)
+     * 格式：类全名
      * */
     private String mapFnName;
 

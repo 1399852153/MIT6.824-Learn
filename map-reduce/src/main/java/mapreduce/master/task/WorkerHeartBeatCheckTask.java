@@ -35,7 +35,7 @@ public class WorkerHeartBeatCheckTask implements Runnable{
             try {
                 String result = workerServerService.healthCheck();
                 if(Objects.equals(result, RpcConstants.HEALTHY_CHECK_RESULT)){
-                    // 健康检查失败
+                    // 健康检查失败（todo 优化一下，可以多调用几次避免网络波动的影响）
                     heartBeatCheckFailProcess(workerAddress);
                 }else{
                     logger.info("do WorkerHeartBeatCheckTask success! workerAddress={}",workerAddress);

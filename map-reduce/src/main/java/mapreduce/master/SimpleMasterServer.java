@@ -29,7 +29,7 @@ public class SimpleMasterServer implements MasterServerService {
 
         // 周期性的进行健康检查
         scheduledThreadPoolExecutor.schedule(
-            new WorkerHeartBeatCheckTask(this.workerInfoMap,this.workerServerService),10, TimeUnit.SECONDS);
+            new WorkerHeartBeatCheckTask(this.workerInfoMap,this.workerServerService),1, TimeUnit.SECONDS);
     }
 
     @Override

@@ -1,15 +1,13 @@
 package mapreduce.test;
 
+import mapreduce.common.KVPair;
 import mapreduce.common.MapFunction;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class MapFn1 implements MapFunction {
     @Override
-    public Map<String, String> execute(String fileName, String content) {
-        Map<String,String> map = new HashMap<>();
-        map.put(fileName,content);
-        return map;
+    public List<KVPair> execute(String fileName, String content) {
+        return Collections.singletonList(new KVPair(fileName, content));
     }
 }

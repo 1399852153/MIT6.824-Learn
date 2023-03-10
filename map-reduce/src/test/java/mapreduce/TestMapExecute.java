@@ -1,15 +1,17 @@
 package mapreduce;
 
+import mapreduce.common.KVPair;
 import mapreduce.common.MapFunction;
 import mapreduce.constants.WorkerConstants;
 import mapreduce.rpc.model.DoMapParam;
+import mapreduce.util.FileUtil;
 import mapreduce.util.ReflectUtil;
 import mapreduce.worker.SimpleWorkerServer;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.Map;
+import java.util.List;
 
 public class TestMapExecute {
 
@@ -17,22 +19,20 @@ public class TestMapExecute {
     public void testMapFunctionExecute(){
         String mapFnName = "mapreduce.test.MapFn1";
         MapFunction mapFunction = ReflectUtil.getTargetMapFunction(mapFnName);
-        Map<String,String> result = mapFunction.execute("fileName","123");
+        List<KVPair> result = mapFunction.execute("fileName","123");
         System.out.println(result);
-        Assert.assertEquals(result.get("fileName"),"123");
+        Assert.assertEquals(result.get(0).getKey(),"fileName");
+        Assert.assertEquals(result.get(0).getValue(),"123");
     }
 
     @Test
     public void testDoMap(){
         // 清空原目录下的所有文件
         File tempDir = new File(WorkerConstants.DEFAULT_MAP_TEMP_FILE_DIR);
-        if(tempDir.listFiles() != null) {
-            for (File file : tempDir.listFiles()) {
-                file.delete();
-            }
-        }
+        FileUtil.cleanFileDir(tempDir);
 
-        SimpleWorkerServer simpleWorkerServer = new SimpleWorkerServer(WorkerConstants.DEFAULT_MAP_TEMP_FILE_DIR);
+        SimpleWorkerServer simpleWorkerServer = new SimpleWorkerServer(
+            WorkerConstants.DEFAULT_MAP_TEMP_FILE_DIR,WorkerConstants.DEFAULT_REDUCE_OUTPUT_FILE_DIR);
 
         String userPath = System.getProperty("user.dir");
         String testFilePath = userPath + "/src/test/test.txt";

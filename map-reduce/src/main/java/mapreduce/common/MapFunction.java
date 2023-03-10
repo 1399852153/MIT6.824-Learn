@@ -1,6 +1,6 @@
 package mapreduce.common;
 
-import java.util.Map;
+import java.util.List;
 
 @FunctionalInterface
 public interface MapFunction {
@@ -9,5 +9,5 @@ public interface MapFunction {
      * @param fileName 输入的文件名
      * @param content 输入文件的内容
      * */
-    Map<String,String> execute(String fileName, String content);
+    List<KVPair> execute(String fileName, String content);
 }

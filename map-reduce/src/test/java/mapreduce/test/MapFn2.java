@@ -4,9 +4,7 @@ import mapreduce.common.KVPair;
 import mapreduce.common.MapFunction;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MapFn2 implements MapFunction {
     @Override
@@ -14,10 +12,16 @@ public class MapFn2 implements MapFunction {
         List<KVPair> kvPairList = new ArrayList<>();
 
         String[] lines = content.split(System.lineSeparator());
-        int i = 0;
         for(String line : lines){
-            kvPairList.add(new KVPair(line+"-"+i,line+"-MapFn2"));
-            i++;
+            if(!line.isEmpty()){
+                // 最后一位做key
+                if(line.length() > 1){
+                    String key = line.substring(line.length()-1);
+                    kvPairList.add(new KVPair(key,line));
+                }else{
+                    kvPairList.add(new KVPair(line,line));
+                }
+            }
         }
         return kvPairList;
     }

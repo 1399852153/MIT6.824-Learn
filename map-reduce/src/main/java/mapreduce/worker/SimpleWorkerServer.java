@@ -89,7 +89,7 @@ public class SimpleWorkerServer implements WorkerServerService {
         }
 
         // 将reduce的结果写入指定的reduce任务输出文件中
-        File reduceTaskOutputFile = new File(this.reduceOutputFileDir + doReduceParam.getOutputFilePath());
+        File reduceTaskOutputFile = new File(this.reduceOutputFileDir + doReduceParam.getOutputFileName() + "-" + doReduceParam.getReduceTaskId());
         FileUtil.writeInKVPairsInFile(reduceTaskOutputFile,totalReduceResult);
     }
 

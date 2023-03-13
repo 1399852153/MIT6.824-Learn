@@ -35,6 +35,10 @@ public class FileUtil {
     }
 
     public static void cleanFileDir(File fileDir){
+        if(!fileDir.exists()){
+            return;
+        }
+
         if(!fileDir.isDirectory()){
             throw new MapReduceException("fileDir is not a directory：" + fileDir.getName());
         }

@@ -24,9 +24,9 @@ public class DoReduceParam {
     private Integer mapNum;
 
     /**
-     * reduce结果输出文件的路径
+     * reduce结果输出文件名
      * */
-    private String outputFilePath;
+    private String outputFileName;
 
     public String getReduceFnName() {
         return reduceFnName;
@@ -60,11 +60,11 @@ public class DoReduceParam {
         this.mapNum = mapNum;
     }
 
-    public String getOutputFilePath() {
-        return outputFilePath;
+    public String getOutputFileName() {
+        return outputFileName;
     }
 
-    public void setOutputFilePath(String outputFilePath) {
-        this.outputFilePath = outputFilePath;
+    public void setOutputFileName(String outputFileName) {
+        this.outputFileName = outputFileName;
     }
 }

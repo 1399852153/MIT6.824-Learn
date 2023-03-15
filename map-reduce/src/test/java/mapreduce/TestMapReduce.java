@@ -14,6 +14,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -47,16 +48,20 @@ public class TestMapReduce {
         File tempReduceOutputDir = new File(WorkerConstants.DEFAULT_REDUCE_OUTPUT_FILE_DIR);
         FileUtil.cleanFileDir(tempReduceOutputDir);
 
-        File inputFile = TestSetupUtil.generateSerializationMapReduceInputFile(99997);
 
         SimpleWorkerServer simpleWorkerServer = new SimpleWorkerServer(
             WorkerConstants.DEFAULT_MAP_TEMP_FILE_DIR,WorkerConstants.DEFAULT_REDUCE_OUTPUT_FILE_DIR);
 
         String jobName = "testMapReduce-1";
-        int mapTaskNum = 1;
+        int mapTaskNum = 2;
         int reduceTaskNum = 3;
-        String jobInputFilePath = inputFile.getPath();
         String jobOutputFilePath = jobName + "-" + "reduceOutput.txt";
+
+        List<File> inputFileList = new ArrayList<>();
+        for(int i=0; i<mapTaskNum; i++){
+            File inputFile = TestSetupUtil.generateSerializationMapReduceInputFile(100000,i);
+            inputFileList.add(inputFile);
+        }
 
         // 先执行map任务
         for(int i=0; i<mapTaskNum; i++){
@@ -64,7 +69,7 @@ public class TestMapReduce {
             doMapParam.setJobName(jobName);
             doMapParam.setMapFnName("mapreduce.test.MapFn2");
             doMapParam.setMapTaskId(i+"");
-            doMapParam.setInputFilePath(jobInputFilePath);
+            doMapParam.setInputFilePath(inputFileList.get(i).getPath());
             doMapParam.setReduceNum(reduceTaskNum);
             simpleWorkerServer.doMap(doMapParam);
         }

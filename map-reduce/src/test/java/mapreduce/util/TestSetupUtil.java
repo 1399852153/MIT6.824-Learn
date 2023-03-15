@@ -6,9 +6,9 @@ import java.io.*;
 
 public class TestSetupUtil {
 
-    public static File generateSerializationMapReduceInputFile(int totalNum){
+    public static File generateSerializationMapReduceInputFile(int totalNum, int num){
         String userPath = System.getProperty("user.dir");
-        String fileName = userPath + "/src/test/SerializationMapReduceInputFile.txt";
+        String fileName = userPath + "/src/test/SerializationMapReduceInputFile" + num + ".txt";
 
         File file = new File(fileName);
         if(!file.exists()){

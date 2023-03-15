@@ -8,9 +8,9 @@ import mapreduce.rpc.model.ReportTaskExecuteResultParam;
 import myrpc.consumer.Consumer;
 import myrpc.consumer.ConsumerBootstrap;
 
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -35,7 +35,10 @@ public class SimpleMasterServer implements MasterServerService {
     @Override
     public void registerWorker(RegisterWorkerParam param) {
         WorkerAddress workerAddress = new WorkerAddress(param.getIp(),param.getPort());
-        this.workerInfoMap.putIfAbsent(workerAddress,new WorkerInfo());
+        WorkerInfo workerInfo = this.workerInfoMap.computeIfAbsent(workerAddress,
+            key -> new WorkerInfo());
+        // 更新注册时间
+        workerInfo.setRegisterDate(new Date());
     }
 
     @Override

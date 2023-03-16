@@ -168,10 +168,116 @@ Consensus algorithms for practical systems typically have the following properti
 * They are fully functional (available) as long as any majority of the servers are operational 
   and can communicate with each other and with clients.
   Thus, a typical cluster of five servers can tolerate the failure of any two servers. 
-  Servers are assumed to fail by stopping; they may later recover from state on stable storage and rejoin the cluster
+  Servers are assumed to fail by stopping; they may later recover from state on stable storage and rejoin the cluster.
 * They do not depend on timing to ensure the consistency of the logs: 
   faulty clocks and extreme message delays can, at worst, cause availability problems.
 * In the common case, a command can complete as soon as a majority of the cluster has responded to a single round of remote procedure calls;
   a minority of slow servers need not impact overall system performance.
+
+#####
+实际系统中的共识算法通常具有以下属性：
+* 它们确保在所有非拜占庭条件下的安全性(永远不返回错误结果)，(非拜占庭条件)包括网络延迟，分区，和丢包，重复以及重新排序。
+* 只要大多数服务器能够正常工作并且能够与其它服务器以及客户端互相通信，共识算法就能发挥其全部的功能(可用性)。
+  因此，一个典型的有着5台服务器组成的集群能够容忍任意两台服务器出现故障。
+  假设服务器因为故障而停机；他们可以稍后从稳定的存储状态中恢复并重新加入集群。
+* 他们不依赖时间来确保日志的一致性：错误的时钟和极端的消息延迟在最坏的情况下会造成可用性问题。
+* 通常情况下，只要集群中的大多数对单轮的远过程调用做出了响应，命令就可以完成。占少数的慢速服务器不会对系统整体性能造成影响。
+
+### 3 What’s wrong with Paxos?(Paxos存在的问题)
+#####
+Over the last ten years, Leslie Lamport’s Paxos protocol has become almost synonymous with consensus:
+it is the protocol most commonly taught in courses, and most implementations of consensus use it as a starting point.
+Paxos first defines a protocol capable of reaching agreement on a single decision, such as a single replicated log entry. 
+We refer to this subset as single-decree Paxos. 
+Paxos then combines multiple instances of this protocol to facilitate a series of decisions such as a log (multi-Paxos).
+Paxos ensures both safety and liveness, and it supports changes in cluster membership. 
+Its correctness has been proven, and it is efficient in the normal case.
+#####
+在过去的十年中，Leslie Lamport的Paxos协议几乎已经成为了共识算法的代名词：
+它是课堂教学中最常用的协议，大多数的共识算法也将其作为起点。
+Paxos首先定义了一个协议，其能够就单个决定达成一致，例如单个日志条目的复制。
+我们将这一自己称为single-decree Paxos。
+然后Paxos将该协议的多个实例组合起来以达成一系列的决定，例如日志(multi-Paxos)。
+Paxos同时保证了安全性和活性，并且支持集群成员的变更。
+其正确性已经得到证明，并且在通常情况下是高效的。
+
+
+#####
+Unfortunately, Paxos has two significant drawbacks.
+The first drawback is that Paxos is exceptionally difficult to understand. 
+The full explanation is notoriously opaque; few people succeed in understanding it, and only with great effort.
+As a result, there have been several attempts to explain Paxos in simpler terms.
+These explanations focus on the single-decree subset, yet they are still challenging. 
+In an informal survey of attendees at NSDI 2012, we found few people who were comfortable with Paxos, even among seasoned researchers.
+We struggled with Paxos ourselves; 
+we were not able to understand the complete protocol until after reading several simplified explanations 
+and designing our own alternative protocol, a process that took almost a year.
+#####
+不幸的是，Paxos有着两个明显的缺点。
+第一个缺点是Paxos异乎寻常的难理解。
+Paxos出了名的难理解，即使在付出了巨大努力的情况下，也很少有人能成功的理解它。
+因此，有一些人尝试着用更简单的方式来理解Paxos。
+这些解释聚焦于single-decree这一子集，但这仍具有挑战性。
+在一项针对NSDI 2012与会者的非正式调查中，我们发现很少有人对Paxos感到满意，即使对于经验丰富的研究员来说也是如此。
+我们也与Paxos进行了艰难的斗争；直到阅读了几个简化的解释并设计了我们自己的替代方案后我们才能够理解完整的协议，而这个过程花费了将近一年的时间。
+
+#####
+We hypothesize that Paxos’ opaqueness derives from its choice of the single-decree subset as its foundation.
+Single-decree Paxos is dense and subtle: 
+it is divided into two stages that do not have simple intuitive explanations and cannot be understood independently. 
+Because of this, it is difficult to develop intuitions about why the single-decree protocol works.
+The composition rules for multi-Paxos add significant additional complexity and subtlety. 
+We believe that the overall problem of reaching consensus on multiple decisions (i.e., a log instead of a single entry) 
+can be decomposed in other ways that are more direct and obvious.
+#####
+我们猜定Paxos晦涩难懂的原因在于作者选择以single-decree这一子集作为Paxos的基础。
+Single-decree Paxos是难理解和精巧的：
+它被分为了两个阶段，并且没有简单直接的说明，每一阶段也无法单独的理解。
+正因如此，很难凭借直觉的理解single-decree协议为什么能够工作。
+multi-Paxos的组合规则也显著的增加了复杂性和微妙之处。
+我们认为，就多个决定达成一致的总体问题(例如，使用日志而不是单个的entry)能够被分解为其它更直接和更容易理解的方式。
+
+#####
+The second problem with Paxos is that it does not provide a good foundation for building practical implementations. 
+One reason is that there is no widely agreedupon algorithm for multi-Paxos.
+Lamport’s descriptions are mostly about single-decree Paxos; 
+he sketched possible approaches to multi-Paxos, but many details are missing. 
+There have been several attempts to flesh out and optimize Paxos, such as [26], [39], and [13], 
+but these differ from each other and from Lamport’s sketches.
+Systems such as Chubby [4] have implemented Paxos-like algorithms, but in most cases their details have not been published.
+
+#####
+Furthermore, the Paxos architecture is a poor one for building practical systems; 
+this is another consequence of the single-decree decomposition.
+For example, there is little benefit to choosing a collection of log entries independently and then melding them into a sequential log;
+this just adds complexity. 
+It is simpler and more efficient to design a system around a log, 
+where new entries are appended sequentially in a constrained order. 
+Another problem is that Paxos uses a symmetric peer-to-peer approach at its core
+(though it eventually suggests a weak form of leadership as a performance optimization).
+This makes sense in a simplified world where only one decision will be made, but few practical systems use this approach.
+If a series of decisions must be made, it is simpler and faster to first elect a leader, then have the leader coordinate the decisions.
+
+#####
+As a result, practical systems bear little resemblance to Paxos. 
+Each implementation begins with Paxos, discovers the difficulties in implementing it, 
+and then develops a significantly different architecture. 
+This is time-consuming and error-prone, and the difficulties of understanding Paxos exacerbate the problem.
+Paxos’ formulation may be a good one for proving theorems about its correctness, 
+but real implementations are so different from Paxos that the proofs have little value. 
+The following comment from the Chubby implementers is typical:
+
+#####
+There are significant gaps between the description of the Paxos algorithm 
+and the needs of a real-world system. . . . the final system will be based on an unproven protocol [4].
+
+#####
+Because of these problems, we concluded that Paxos does not provide a good foundation either for system building or for education.
+Given the importance of consensus in large-scale software systems,
+we decided to see if we could design an alternative consensus algorithm with better properties than Paxos. 
+Raft is the result of that experiment.
+
+
+
 
 

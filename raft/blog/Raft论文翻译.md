@@ -1,5 +1,5 @@
 # In Search of an Understandable Consensus Algorithm(Extended Version)
-寻找一种可理解的共识算法(拓展版)
+寻找一种可理解的一致性算法(拓展版)
 
 ##### 作者：斯坦福大学的Diego Ongaro和John Ousterhout
 
@@ -14,9 +14,9 @@ and it enforces a stronger degree of coherency to reduce the number of states th
 Results from a user study demonstrate that Raft is easier for students to learn than Paxos. 
 Raft also includes a new mechanism for changing the cluster membership, which uses overlapping majorities to guarantee safety.
 #####
-Raft是一种用于管理复制日志的共识算法。
+Raft是一种用于管理复制日志的一致性算法。
 其和(multi-)Paxos算法作用相同，并且和Paxos一样高效，但其结构与Paxos不同；这使得Raft比起Paxos更容易理解同时也为构建实际可行的系统提供了一个更好的基础。
-为了让Raft更容易理解，Raft拆分了有关共识的关键元素，例如leader选举，日志复制以及安全性等，并通过增强一致性的程度以减少必须被考虑的状态数量。
+为了让Raft更容易理解，Raft拆分了有关一致性的关键元素，例如leader选举，日志复制以及安全性等，并通过增强一致性的程度以减少必须被考虑的状态数量。
 用户的研究成果表示Raft比起Paxos要更容易让学生进行学习。
 Raft还包含了一个改变集群成员的新机制，其使用重叠的大多数(overlapping majorities)来保证安全。
 
@@ -27,9 +27,9 @@ Paxos has dominated the discussion of consensus algorithms over the last decade:
 most implementations of consensus are based on Paxos or influenced by it, 
 and Paxos has become the primary vehicle used to teach students about consensus.
 #####
-共识算法允许一个机器的集群作为一个具有一致性的组来进行工作，使得在一些成员出现故障时集群依然能正常工作。
+一致性算法允许一个机器的集群作为一个具有一致性的组来进行工作，使得在一些成员出现故障时集群依然能正常工作。
 正因为如此，在构建可靠的大规模软件系统时其起到了关键的作用。
-Paxos主导了过去十年中关于共识算法的讨论：
+Paxos主导了过去十年中关于一致性算法的讨论：
 大多数的一致性的实现都给予Paxos或者受其影响，并且Paxos成为了教导学生一致性相关知识的主要工具。
 
 #####
@@ -49,8 +49,8 @@ could we define a consensus algorithm for practical systems and describe it in a
 Furthermore, we wanted the algorithm to facilitate the development of intuitions that are essential for system builders.
 It was important not just for the algorithm to work, but for it to be obvious why it works.
 #####
-我们在与Paxos斗争后，我们开始着手去寻找一种新的共识算法，其能够为构建系统和教育提供更好的支持。
-我们的方法是不同寻常的，因为我们的主要目标是(增进)可理解性：我们可以为实际的系统定义一个共识算法并以比Paxos更容易学习的方式去描述它吗？
+我们在与Paxos斗争后，我们开始着手去寻找一种新的一致性算法，其能够为构建系统和教育提供更好的支持。
+我们的方法是不同寻常的，因为我们的主要目标是(增进)可理解性：我们可以为实际的系统定义一个一致性算法并以比Paxos更容易学习的方式去描述它吗？
 此外，我们希望该算法能够促进直觉的发展，这对系统构建者来说是必要的。
 重要的不仅仅是算法是如何工作的，理解算法为什么能工作也是很重要的。
 
@@ -62,7 +62,7 @@ and state space reduction (relative to Paxos, Raft reduces the degree of nondete
 A user study with 43 students at two universities shows that Raft is significantly easier to understand than Paxos: 
 after learning both algorithms, 33 of these students were able to answer questions about Raft better than questions about Paxos.
 #####
-这项工作的成果是一个名为Raft的共识算法。
+这项工作的成果是一个名为Raft的一致性算法。
 在设计Raft时，我们应用了特别的技术来改善可理解性，包括分解(Raft将leader选举，日志复制和安全性进行了分解)
 以及状态空间的缩减(相对于Paxos，Raft缩减了不确定性的程度以及服务器之间彼此不一致的方式)。
 一项对两所大学中的43名学生的调查显示Raft比Paxos容易理解的多：在学习了两种算法后，相比回答Paxos相关问题，其中33名学生能更好的回答关于Raft的问题。
@@ -81,12 +81,12 @@ but it has several novel features:
   This allows the cluster to continue operating normally during configuration changes.
 
 #####
-Raft与已有的共识算法在很多方面都很相似(尤其是Oki和Liskov的Viewstamped Replication算法)，但Raft有几个新颖的功能：
-* **Strong leader:** Raft使用比其它共识算法更强力的leader。
+Raft与已有的一致性算法在很多方面都很相似(尤其是Oki和Liskov的Viewstamped Replication算法)，但Raft有几个新颖的功能：
+* **Strong leader:** Raft使用比其它一致性算法更强力的leader。
   举个例子，日志条目仅从leader流向其它服务器。这简化了被复制日志的管理并且使得Raft更加容易被理解。
 * **Leader election:** Raft使用随机计时器来选举leader。
-  这只在任何共识算法都需要的心跳检测中增加了少量机制，同时简单且快速的解决冲突。
-* **Membership changes:** Raft用于改变集群中服务器集合的机制使用了一种新的联合共识方法，其中两个不同配置的多数在过渡期间是重叠的。
+  这只在任何一致性算法都需要的心跳检测中增加了少量机制，同时简单且快速的解决冲突。
+* **Membership changes:** Raft用于改变集群中服务器集合的机制使用了一种新的联合的一致性方法，其中两个不同配置的多数在过渡期间是重叠的。
   这允许集群在配置改变时继续正常工作。
 
 #####
@@ -96,7 +96,7 @@ it is described completely enough to meet the needs of a practical system;
 it has several open-source implementations and is used by several companies; 
 its safety properties have been formally specified and proven; and its efficiency is comparable to other algorithms.
 #####
-我们认为，无论是处于教育的目的还是作为实际(系统)的实现，Raft都是胜过Paxos和其它共识算法的。
+我们认为，无论是处于教育的目的还是作为实际(系统)的实现，Raft都是胜过Paxos和其它一致性算法的。
 它比其它算法更加简单和容易理解；
 它被详细的描述使得其足以满足实际系统的需要；
 它有着几个开源的实现并且被几家公司所使用；
@@ -112,7 +112,7 @@ evaluates Raft (Section 9), and discusses related work (Section 10).
 本文的剩余部分介绍了复制状态机问题(第2节)，
 天伦了Paxos的优缺点(第3节)，
 描述了我们使算法易于理解的一般性方法(第4节)，
-提出了Raft共识算法(第5-8节)，
+提出了Raft一致性算法(第5-8节)，
 评估了Raft(第9节)，并且讨论了相关的工作(第10节)。
 
 ### 2 Replicated state machines(复制状态机)
@@ -127,7 +127,7 @@ that must survive leader crashes.
 Examples of replicated state machines include Chubby and ZooKeeper.
 
 #####
-共识算法是在复制状态机的背景下产生的。
+一致性算法是在复制状态机的背景下产生的。
 在这个方法中，服务器集合中的状态机在具有相同状态的完全一致的副本上进行计算，并且即使一些服务器已经宕机也能够持续的工作。
 复制状态机被用于在分布式系统中解决一系列的容错问题。
 举个例子，有着一个单独集群leader的大规模系统，例如GFS，HDFS以及RAMCloud，通常使用一个单独的复制状态机来管理leader选举和存储在leader崩溃后所必须的配置信息。
@@ -155,9 +155,9 @@ Once commands are properly replicated, each server’s state machine processes t
 and the outputs are returned to clients. 
 As a result, the servers appear to form a single, highly reliable state machine.
 #####
-保持复制日志的一致性是共识算法的工作。
-服务器中的共识模块接受来自客户端的指令并且将其加入日志。
-它与其它服务器的共识模块进行通信以确保每一个日志最终以同样的顺序包含同样的请求，即使其中一些服务器故障了。
+保持复制日志的一致性是一致性算法的工作。
+服务器中的一致性模块接受来自客户端的指令并且将其加入日志。
+它与其它服务器的一致性模块进行通信以确保每一个日志最终以同样的顺序包含同样的请求，即使其中一些服务器故障了。
 一旦指令被正确的复制，每一个服务器的状态机都按照日志中的顺序处理这些指令，并将输出返回给客户端。
 因此，服务器的集合似乎形成了一个单独的，高度可靠的状态机。
 
@@ -175,9 +175,9 @@ Consensus algorithms for practical systems typically have the following properti
   a minority of slow servers need not impact overall system performance.
 
 #####
-实际系统中的共识算法通常具有以下属性：
+实际系统中的一致性算法通常具有以下属性：
 * 它们确保在所有非拜占庭条件下的安全性(永远不返回错误结果)，(非拜占庭条件)包括网络延迟，分区，和丢包，重复以及重新排序。
-* 只要大多数服务器能够正常工作并且能够与其它服务器以及客户端互相通信，共识算法就能发挥其全部的功能(可用性)。
+* 只要大多数服务器能够正常工作并且能够与其它服务器以及客户端互相通信，一致性算法就能发挥其全部的功能(可用性)。
   因此，一个典型的有着5台服务器组成的集群能够容忍任意两台服务器出现故障。
   假设服务器因为故障而停机；他们可以稍后从稳定的存储状态中恢复并重新加入集群。
 * 他们不依赖时间来确保日志的一致性：错误的时钟和极端的消息延迟在最坏的情况下会造成可用性问题。
@@ -193,8 +193,8 @@ Paxos then combines multiple instances of this protocol to facilitate a series o
 Paxos ensures both safety and liveness, and it supports changes in cluster membership. 
 Its correctness has been proven, and it is efficient in the normal case.
 #####
-在过去的十年中，Leslie Lamport的Paxos协议几乎已经成为了共识算法的代名词：
-它是课堂教学中最常用的协议，大多数的共识算法也将其作为起点。
+在过去的十年中，Leslie Lamport的Paxos协议几乎已经成为了一致性算法的代名词：
+它是课堂教学中最常用的协议，大多数的一致性算法也将其作为起点。
 Paxos首先定义了一个协议，其能够就单个决定达成一致，例如单个日志条目的复制。
 我们将这一自己称为single-decree Paxos。
 然后Paxos将该协议的多个实例组合起来以达成一系列的决定，例如日志(multi-Paxos)。
@@ -239,12 +239,18 @@ multi-Paxos的组合规则也显著的增加了复杂性和微妙之处。
 
 #####
 The second problem with Paxos is that it does not provide a good foundation for building practical implementations. 
-One reason is that there is no widely agreedupon algorithm for multi-Paxos.
+One reason is that there is no widely agreed-upon algorithm for multi-Paxos.
 Lamport’s descriptions are mostly about single-decree Paxos; 
 he sketched possible approaches to multi-Paxos, but many details are missing. 
 There have been several attempts to flesh out and optimize Paxos, such as [26], [39], and [13], 
 but these differ from each other and from Lamport’s sketches.
 Systems such as Chubby [4] have implemented Paxos-like algorithms, but in most cases their details have not been published.
+#####
+Paxos的第二个问题是它没有为构建实际可行的实现提供一个好的基础。
+其中一个原因是对于multi-Paxos没有一个被广泛认同的算法。
+Lamport的描述大多数都是关于single-decree Paxos的；他简要的概述了实现multi-Paxos的可行的方法，但缺失了很多的细节。
+已经有几个(团队)试图去具体化和优化Paxos，例如[26],[39]和[13],但这些尝试彼此间不同且也不同于Lamport的概述。
+像Chubby系统已经实现了类似Paxos的算法，但大多数情况下的细节并没有被公开。
 
 #####
 Furthermore, the Paxos architecture is a poor one for building practical systems; 
@@ -257,6 +263,13 @@ Another problem is that Paxos uses a symmetric peer-to-peer approach at its core
 (though it eventually suggests a weak form of leadership as a performance optimization).
 This makes sense in a simplified world where only one decision will be made, but few practical systems use this approach.
 If a series of decisions must be made, it is simpler and faster to first elect a leader, then have the leader coordinate the decisions.
+#####
+此外，Paxos的架构在构建实际的系统时表现不佳；这是对single-decree进行分解的另一个结果。
+例如，选择一组独立的日志集合并将其合并到一个顺序日志中几乎没有带来什么好处；这只会增加复杂性。
+围绕日志来设计系统会更简单和更高效，其中新的日志条目以受约束的顺序追加。
+另一个问题是，Paxos使用了一种对称的点对点(P2P)方法作为其核心(尽管最后提出了一种更弱形式的leadership作为性能优化)。
+在一个只需要做一次决定的，被简化的世界中这样是行得通的，但很少有实际的系统使用这个方式。
+如果有一系列的决定必须要做，首先选举出一个leader，然后leader来协调决策会更简单和更快速。
 
 #####
 As a result, practical systems bear little resemblance to Paxos. 
@@ -265,18 +278,74 @@ and then develops a significantly different architecture.
 This is time-consuming and error-prone, and the difficulties of understanding Paxos exacerbate the problem.
 Paxos’ formulation may be a good one for proving theorems about its correctness, 
 but real implementations are so different from Paxos that the proofs have little value. 
-The following comment from the Chubby implementers is typical:
-
 #####
-There are significant gaps between the description of the Paxos algorithm 
-and the needs of a real-world system. . . . the final system will be based on an unproven protocol [4].
+The following comment from the Chubby implementers is typical:  
+_There are significant gaps between the description of the Paxos algorithm 
+and the needs of a real-world system. . . . the final system will be based on an unproven protocol [4]._
+#####
+因此，实际的系统与Paxos几乎没有相似之处。
+每一个实现都从Paxos出发，发现实现Paxos的困难之处，然后开发出一个与之截然不同的架构。
+这既耗费时间又容易出错，并且Paxos的晦涩难懂加剧了这一问题。
+Paxos的公式可能可以很好的证明其正确性，但是实际的实现与Paxos是如此的不同，以至于这些证明几乎毫无价值。
+#####
+以下Chubby实现者的评论是具有代表性的：  
+_Paxos算法的描述与现实世界系统的需求之间有着巨大的鸿沟....最终的系统将建立在一个未被证明的协议之上。_
 
 #####
 Because of these problems, we concluded that Paxos does not provide a good foundation either for system building or for education.
 Given the importance of consensus in large-scale software systems,
 we decided to see if we could design an alternative consensus algorithm with better properties than Paxos. 
 Raft is the result of that experiment.
+#####
+由于这些问题，我们的结论是Paxos并没有为构建系统或是进行教育提供一个好的基础。
+考虑到一致性在大规模软件系统中的重要性，我们决定看看我们是否可以设计出一个比起Paxos有着更好特性的一致性算法。
+Raft正是这一实验的成果。
 
+### 4 Designing for understandability(为通俗易懂而设计)
+#####
+We had several goals in designing Raft: it must provide a complete and practical foundation for system building,
+so that it significantly reduces the amount of design work required of developers; 
+it must be safe under all conditions and available under typical operating conditions; and it must be efficient for common operations.
+But our most important goal—and most difficult challenge—was understandability. 
+It must be possible for a large audience to understand the algorithm comfortably. 
+In addition, it must be possible to develop intuitions about the algorithm,
+so that system builders can make the extensions that are inevitable in real-world implementations.
+#####
+我们在设计Raft时有几个目标：它必须为构建系统提供一个完整的和实际的基础，从而显著的减少开发者设计时所需的工作；
+它必须在任何条件下都是安全的并且在典型的工作状态下是可用的；同时它必须在通常工作状态下是高效的。
+但我们最重要的目标也是最困难的挑战是使得Raft通俗易懂。
+必须尽可能的使大多数人能够轻松的理解该算法。
+这样系统构建者才能够在现实世界的实现中进行不可避免的拓展。
+
+#####
+There were numerous points in the design of Raft where we had to choose among alternative approaches.
+In these situations we evaluated the alternatives based on understandability: 
+how hard is it to explain each alternative (for example, how complex is its state space,
+and does it have subtle implications?), and how easy will it be for a reader to completely understand the approach and its implications?
+#####
+在设计Raft时有很多要点都必须在多个可选方案中抉择。
+在这些情况下，我们基于易懂性来评估这些可选方案：  
+对于每一个可选方案解释起来有多困难(例如，状态空间有多复杂以及是否有微妙的含义？)，以及对于一个读者来说完全理解这个方法和其含义有多容易？
+
+#####
+We recognize that there is a high degree of subjectivity in such analysis; nonetheless, we used two techniques that are generally applicable.
+The first technique is the well-known approach of problem decomposition: 
+wherever possible, we divided problems into separate pieces that could be solved, explained, and understood relatively independently. 
+For example, in Raft we separated leader election, log replication, safety, and membership changes.
+#####
+我们意识到这一分析方式具有高度的主观性；尽管如此，但我们还是使用了两种可行的通用技术。
+第一个技术是众所周知的问题分解方法：
+在可能的情况下，我们将问题分解为几个部分，使得每一部分都可以被相对独立的解决，解释和理解。
+例如，我们将Raft分解为leader选举，日志复制，安全性和成员变更这几个部分。
+
+#####
+Our second approach was to simplify the state space by reducing the number of states to consider,
+making the system more coherent and eliminating nondeterminism where possible. 
+Specifically, logs are not allowed to have holes, and Raft limits the ways in which logs can become inconsistent with each other.
+Although in most cases we tried to eliminate nondeterminism, there are some situations where nondeterminism actually improves understandability.
+In particular, randomized approaches introduce nondeterminism, 
+but they tend to reduce the state space by handling all possible choices in a similar fashion(“choose any; it doesn’t matter”). 
+We used randomization to simplify the Raft leader election algorithm.
 
 
 

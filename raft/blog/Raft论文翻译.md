@@ -3,7 +3,7 @@
 
 ##### 作者：斯坦福大学的Diego Ongaro和John Ousterhout
 
-### Abstract(摘要)
+## Abstract(摘要)
 #####
 Raft is a consensus algorithm for managing a replicated log.
 It produces a result equivalent to (multi-)Paxos, and it is as efficient as Paxos, but its structure is different from Paxos; 
@@ -20,7 +20,7 @@ Raft是一种用于管理复制日志的一致性算法。
 用户的研究成果表示Raft比起Paxos要更容易让学生进行学习。
 Raft还包含了一个改变集群成员的新机制，其使用重叠的大多数(overlapping majorities)来保证安全。
 
-### 1 Introduction(介绍)
+## 1 Introduction(介绍)
 Consensus algorithms allow a collection of machines to work as a coherent group that can survive the failures of some of its members.
 Because of this, they play a key role in building reliable large-scale software systems.
 Paxos has dominated the discussion of consensus algorithms over the last decade: 
@@ -115,7 +115,7 @@ evaluates Raft (Section 9), and discusses related work (Section 10).
 提出了Raft一致性算法(第5-8节)，
 评估了Raft(第9节)，并且讨论了相关的工作(第10节)。
 
-### 2 Replicated state machines(复制状态机)
+## 2 Replicated state machines(复制状态机)
 #####
 Consensus algorithms typically arise in the context of replicated state machines.
 In this approach, state machines on a collection of servers compute identical copies of the same state
@@ -133,7 +133,7 @@ Examples of replicated state machines include Chubby and ZooKeeper.
 举个例子，有着一个单独集群leader的大规模系统，例如GFS，HDFS以及RAMCloud，通常使用一个单独的复制状态机来管理leader选举和存储在leader崩溃后所必须的配置信息。
 复制状态机的例子包括Chubby和ZooKeeper。
 
-![img.png](img.png)
+![Figure1.png](Figure1.png)
 
 #####
 Replicated state machines are typically implemented using a replicated log, as shown in Figure 1. 
@@ -183,7 +183,7 @@ Consensus algorithms for practical systems typically have the following properti
 * 他们不依赖时间来确保日志的一致性：错误的时钟和极端的消息延迟在最坏的情况下会造成可用性问题。
 * 通常情况下，只要集群中的大多数对单轮的远过程调用做出了响应，命令就可以完成。占少数的慢速服务器不会对系统整体性能造成影响。
 
-### 3 What’s wrong with Paxos?(Paxos存在的问题)
+## 3 What’s wrong with Paxos?(Paxos存在的问题)
 #####
 Over the last ten years, Leslie Lamport’s Paxos protocol has become almost synonymous with consensus:
 it is the protocol most commonly taught in courses, and most implementations of consensus use it as a starting point.
@@ -301,7 +301,7 @@ Raft is the result of that experiment.
 考虑到一致性在大规模软件系统中的重要性，我们决定看看我们是否可以设计出一个比起Paxos有着更好特性的一致性算法。
 Raft正是这一实验的成果。
 
-### 4 Designing for understandability(为通俗易懂而设计)
+## 4 Designing for understandability(为通俗易懂而设计)
 #####
 We had several goals in designing Raft: it must provide a complete and practical foundation for system building,
 so that it significantly reduces the amount of design work required of developers; 
@@ -346,6 +346,101 @@ Although in most cases we tried to eliminate nondeterminism, there are some situ
 In particular, randomized approaches introduce nondeterminism, 
 but they tend to reduce the state space by handling all possible choices in a similar fashion(“choose any; it doesn’t matter”). 
 We used randomization to simplify the Raft leader election algorithm.
+#####
+我们的第二种方法是通过减少需要考虑的状态数量以简化状态空间，使系统变得更加连贯并尽可能的消除不确定性。
+特别的，日志是不允许存在空洞的，并且Raft限制了使得日志间变得彼此不一致的方式。
+尽管在大多数情况下我们试图消除不确定性，但在一些条件下不确定性实际上能提高可理解性。
+特别的，随机化方法引入了不确定性，但它们倾向于通过用相似的方式来处理所有可能的选择以减少状态空间("选择任意一个;具体是哪一个则无关紧要")。
+我们使用随机化来简化Raft中的领导选举算法。
+
+## 5. The Raft consensus algorithm(Raft一致性算法)
+#####
+Raft is an algorithm for managing a replicated log of the form described in Section 2. 
+Figure 2 summarizes the algorithm in condensed form for reference, and Figure 3 lists key properties of the algorithm;
+the elements of these figures are discussed piecewise over the rest of this section.
+#####
+Raft是一种管理如第二节所述的复制日志的算法。
+图2以简明扼要的总结了算法以供参考，图3列举出了算法的关键特性；这些图中的元素将在本节剩余的部分中进行讨论。
+
+#####
+Raft implements consensus by first electing a distinguished leader, 
+then giving the leader complete responsibility for managing the replicated log.
+The leader accepts log entries from clients, 
+replicates them on other servers, and tells servers when it is safe to apply log entries to their state machines. 
+Having a leader simplifies the management of the replicated log. 
+For example, the leader can decide where to place new entries in the log without consulting other servers,
+and data flows in a simple fashion from the leader to other servers. 
+A leader can fail or become disconnected from the other servers, in which case a new leader is elected.
+#####
+Raft通过受限选举出一位distinguished leader，然后让它全权的管理复制日志以实现一致性。
+这个leader接受来自客户端的日志条目，将其复制到其它服务器中，并且在日志条目可以被安全的应用在它们的状态机上时通知这些服务器。
+拥有一个leader可以简化对复制日志的管理。
+例如，leader可以决定新日志条目的位置而无需咨询其它服务器，并且数据流以一种简单的形式由leader流向其它服务器。
+leader可能会故障或者与其它服务器失联，这种情况下一位新的leader将会被选举出来。
+
+#####
+Given the leader approach, Raft decomposes the consensus problem into three relatively independent sub-problems, 
+which are discussed in the subsections that follow:
+* **Leader election:** a new leader must be chosen when an existing leader fails (Section 5.2).
+* **Log replication:** the leader must accept log entries from clients and replicate them across the cluster,
+  forcing the other logs to agree with its own (Section 5.3).
+* **Safety:** the key safety property for Raft is the State Machine Safety Property in Figure 3: 
+  if any server has applied a particular log entry to its state machine,
+  then no other server may apply a different command for the same log index.
+  Section 5.4 describes how Raft ensures this property; 
+  the solution involves an additional restriction on the election mechanism described in Section 5.2.
+
+After presenting the consensus algorithm, this section discusses the issue of availability and the role of timing in the system.
+#####
+通过引入leader的方法，Raft将一致性问题分解为3个相对独立的子问题，这些子问题将在以下子章节中被讨论：
+* **leader选举：** 当一位现存的leader故障时必须选出一位新的leader(5.2节)。
+* **日志复制：** leader必须从客户端接收日志条目并且在集群中复制它们，并且强制其它节点的日志与leader保持一致(5.3节)。
+* **安全性：** Raft的关键安全特性就是图3中的状态机的安全特性：如果任一服务器已经将一个特定的日志条目作用于它的状态机，则没有任何服务器可以对相同的日志索引应用不同的指令。
+  5.4节描述了Raft是如何确保这一特性的；这一解决方案涉及到对5.2节中所描述的选举机制的额外限制。  
+#####
+在展示了一致性算法后，本章节还将讨论可用性问题以及时序在系统中起到的作用。
+
+![Figure2.png](Figure2.png)
+![Figure3.png](Figure3.png)
+
+### 5.1 Raft basics(Raft基础)
+#####
+A Raft cluster contains several servers; five is a typical number, which allows the system to tolerate two failures.
+At any given time each server is in one of three states: leader, follower, or candidate.
+In normal operation there is exactly one leader and all of the other servers are followers. 
+Followers are passive: they issue no requests on their own but simply respond to requests from leaders and candidates.
+The leader handles all client requests (if a client contacts a follower, the follower redirects it to the leader).
+The third state, candidate, is used to elect a new leader as described in Section 5.2. 
+Figure 4 shows the states and their transitions; the transitions are discussed below.
+
+#####
+Raft divides time into terms of arbitrary length, as shown in Figure 5. 
+Terms are numbered with consecutive integers.
+Each term begins with an election, in which one or more candidates attempt to become leader as described in Section 5.2.
+If a candidate wins the election, then it serves as leader for the rest of the term. 
+In some situations an election will result in a split vote.
+In this case the term will end with no leader; a new term (with a new election) will begin shortly. 
+Raft ensures that there is at most one leader in a given term.
+#####
+![Figure4.png](Figure4.png)
+![Figure5.png](Figure5.png)
+
+#####
+Different servers may observe the transitions between terms at different times,
+and in some situations a server may not observe an election or even entire terms. 
+Terms act as a logical clock [14] in Raft, and they allow servers to detect obsolete information such as stale leaders.
+Each server stores a current term number, which increases monotonically over time. 
+Current terms are exchanged whenever servers communicate; 
+if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
+If a candidate or leader discovers that its term is out of date, it immediately reverts to follower state.
+If a server receives a request with a stale term number, it rejects the request.
+
+#####
+Raft servers communicate using remote procedure calls(RPCs), and the basic consensus algorithm requires only two types of RPCs.
+RequestVote RPCs are initiated by candidates during elections (Section 5.2), 
+and AppendEntries RPCs are initiated by leaders to replicate log entries and to provide a form of heartbeat (Section 5.3).
+Section 7 adds a third RPC for transferring snapshots between servers. 
+Servers retry RPCs if they do not receive a response in a timely manner, and they issue RPCs in parallel for best performance.
 
 
 

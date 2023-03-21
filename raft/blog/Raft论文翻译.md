@@ -412,6 +412,14 @@ Followers are passive: they issue no requests on their own but simply respond to
 The leader handles all client requests (if a client contacts a follower, the follower redirects it to the leader).
 The third state, candidate, is used to elect a new leader as described in Section 5.2. 
 Figure 4 shows the states and their transitions; the transitions are discussed below.
+#####
+一个Raft的集群包含几个服务器;通常是5个节点，这样的系统能容忍系统中的2个节点出现故障。
+在任一给定的时间内，每个服务器只会处于3种状态中的一种：领导者(leader),追随者(follower)，或者候选者(candidate)。
+在通常情况下，只会有1个leader并且其它的服务器都是follower。
+Follower都是被动的: 它们自己不会提出请求而只会简单的响应来自leader和candidate的请求。
+leader处理所有来自客户端的请求(如果一个客户端与follower进行联络，follower会将其重定向到leader)。
+第三种状态，candidate，用于选举出一个如5.2章节所描述的新leader。
+图4展示了状态以及状态间的转换关系；转换关系将在下文被讨论。
 
 #####
 Raft divides time into terms of arbitrary length, as shown in Figure 5. 
@@ -422,6 +430,14 @@ In some situations an election will result in a split vote.
 In this case the term will end with no leader; a new term (with a new election) will begin shortly. 
 Raft ensures that there is at most one leader in a given term.
 #####
+Raft将时间分割为任意长度的任期(term)，如图5所示。
+任期由连续的整数进行编号。
+每一个任期都以一次选举开始，其中一个或更多的candidate试图成为leader(如5.2节中所描述的)。
+如果一个candidate赢得了选举，然后它将在余下的任期中作为leader。
+在一些情况下一次选举可能会导致分裂的投票结果。
+在这种情况下，任期将在没有leader的情况下结束; 一个新的任期(伴随者一个新的选举)将很快开始。
+Raft保证了在一个给定的任期内最多只会有一个leader。
+
 ![Figure4.png](Figure4.png)
 ![Figure5.png](Figure5.png)
 
@@ -434,6 +450,13 @@ Current terms are exchanged whenever servers communicate;
 if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
 If a candidate or leader discovers that its term is out of date, it immediately reverts to follower state.
 If a server receives a request with a stale term number, it rejects the request.
+#####
+不同服务器可能会在不同的时间上观察到任期之间的状态转换，并且在一些情况下一个服务器可能不会观察到一次选举甚至整个任期。
+任期在Raft中充当逻辑时钟，并且它们允许服务器检测到过时的信息比如之前的、老leader。
+每一个服务器存储了一个当前任期的编号，其随着时间单调增加。
+每当服务器之间互相通信时，它们都会互相交换当前的任期(编号);如果一个服务器的当前任期(编号)小于其它的服务器，则其将会将当前的任期(编号)更新为那个更大的值。
+如果一个candidate或者leader发现它们的任期(编号)已经过时，它将立即将自己恢复为follower的状态。
+如果一个服务器接受到一个带有过时任期编号的请求，它将拒绝这一请求。
 
 #####
 Raft servers communicate using remote procedure calls(RPCs), and the basic consensus algorithm requires only two types of RPCs.
@@ -441,7 +464,10 @@ RequestVote RPCs are initiated by candidates during elections (Section 5.2),
 and AppendEntries RPCs are initiated by leaders to replicate log entries and to provide a form of heartbeat (Section 5.3).
 Section 7 adds a third RPC for transferring snapshots between servers. 
 Servers retry RPCs if they do not receive a response in a timely manner, and they issue RPCs in parallel for best performance.
-
-
+#####
+Raft服务器使用远过程调用(RPC)进行通信，并且基本的一致性算法只需要两种类型的RPC。
+请求投票的RPC由candidate在选举期间发起(第5.2节)，拓展条目的RPC由leader发起，用于日志条目的复制以及提供心跳机制(第5.3节)。
+第7节加入了第三种RPC用于在服务器间传输快照。
+如果服务器在给定的时间内没有收到响应，则会对RPC进行重试，并且它们会发起并行的rpc以获得最好的性能。
 
 

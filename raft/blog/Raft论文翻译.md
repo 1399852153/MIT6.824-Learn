@@ -470,4 +470,202 @@ Raft服务器使用远过程调用(RPC)进行通信，并且基本的一致性�
 第7节加入了第三种RPC用于在服务器间传输快照。
 如果服务器在给定的时间内没有收到响应，则会对RPC进行重试，并且它们会发起并行的rpc以获得最好的性能。
 
+### 5.2 Leader election(leader选举)
+#####
+Raft uses a heartbeat mechanism to trigger leader election. When servers start up, they begin as followers. 
+A server remains in follower state as long as it receives valid RPCs from a leader or candidate. 
+Leaders send periodic heartbeats (AppendEntries RPCs that carry no log entries) to all followers in order to maintain their authority.
+If a follower receives no communication over a period of time called the election timeout, 
+then it assumes there is no viable leader and begins an election to choose a new leader.
+#####
+Raft使用心跳机制来触发leader选举。当服务器启动时，它们会成为follower。
+只要服务器能从leader或者candidate处接收到有效的RPC请求，它们就将保持follower状态。
+leader向所有follower发送周期性的心跳(不携带日志条目的AppendEntries RPC)来维持它的权威性。
+如果一个follower在一段被成为选举超时的时间段内未接收到任何通信，则它假设当前没有可用的leader并且发起选举来选择一个新的leader。
 
+#####
+To begin an election, a follower increments its current term and transitions to candidate state. 
+It then votes for itself and issues RequestVote RPCs in parallel to each of the other servers in the cluster. 
+A candidate continues in this state until one of three things happens:
+(a) it wins the election, 
+(b) another server establishes itself as leader, or
+(c) a period of time goes by with no winner.
+These outcomes are discussed separately in the paragraphs below.
+#####
+为了开始一轮选举，follower增加它当前的任期值并且转换为candidate状态。
+然后它将选票投给它自己并且向集群中的其它服务器并行的发起请求投票的RPC(RequestVote RPCs)。
+一个candidate会一直保持这种状态直到以下三种情况之一发生：
+(a) 它赢得此次选举 (b) 另一个服务器将自己确认为leader，或者 (c) 一段时间后没有产生胜利者。
+下文中的各个段落将分别讨论这些结果。
+
+#####
+A candidate wins an election if it receives votes from a majority of the servers in the full cluster for the same term. 
+Each server will vote for at most one candidate in a given term, on a first-come-first-served basis
+(note: Section 5.4 adds an additional restriction on votes). 
+The majority rule ensures that at most one candidate can win the election for a particular term (the Election Safety Property in Figure 3).
+Once a candidate wins an election, it becomes leader.
+It then sends heartbeat messages to all of the other servers to establish its authority and prevent new elections.
+#####
+如果一个candidate在同一个任期内接收到了整个集群中大多数服务器的投票，其将赢得这次选举。
+每个服务器在给定的某一任期内将会基于先来先服务的原则(first-come-first-served)投票给至多一位candidate(第5.4节对投票增加了额外的限制)。
+多数规则确保了对于一个特定的任期，最多只会有一名candidate能够赢得选举(图3中选举的安全特性)。
+一旦一个candidate赢得了一次选举，它将成为leader。
+然后它向其它服务器发送心跳信息以建立权威并且阻止新的选举。
+
+#####
+While waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader. 
+If the leader’s term (included in its RPC) is at least as large as the candidate’s current term, 
+then the candidate recognizes the leader as legitimate and returns to follower state. 
+If the term in the RPC is smaller than the candidate’s current term, then the candidate rejects the RPC and continues in candidate state.
+#####
+在等待投票时，一个candidate可能会接受到来自自称是leader的其它服务器的AppendEntries RPC。
+如果leader的任期(包含在它的RPC中)大于或等于candidate的当前任期，那么candidate承认该leader是合法的并且返回到follower状态。
+如果RPC中的任期小于candidate的当前任期，candidate将会拒绝这一RPC并且继续保持candidate的状态。
+
+#####
+The third possible outcome is that a candidate neither wins nor loses the election:
+if many followers become candidates at the same time, votes could be split so that no candidate obtains a majority.
+When this happens, each candidate will time out and start a new election by incrementing its term 
+and initiating another round of RequestVote RPCs.
+However, without extra measures split votes could repeat indefinitely.
+#####
+第三种可能的结果是一个candidate既没有赢得选举也没有输掉选举：
+如果许多follower都在同一时间成为了candidate，投票可能会被瓜分导致没有candidate获得大多数的选票。
+当这种情况发生时，每一个candidate都将会超时并且通过增加它的任期值并且初始化另一轮的RequestVote RPCs以开始一轮新的选举。
+然而，如果不采取额外的措施，分裂的投票可能会无限的重复。
+
+#####
+Raft uses randomized election timeouts to ensure that split votes are rare and that they are resolved quickly.
+To prevent split votes in the first place, election timeouts are chosen randomly from a fixed interval (e.g., 150–300ms).
+This spreads out the servers so that in most cases only a single server will time out; 
+it wins the election and sends heartbeats before any other servers time out.
+The same mechanism is used to handle split votes. 
+Each candidate restarts its randomized election timeout at the start of an election, and it waits for that timeout to elapse before
+starting the next election; this reduces the likelihood of another split vote in the new election. 
+Section 9.3 shows that this approach elects a leader rapidly.
+#####
+Raft使用随机化的选举超时时间来确保分裂的投票很少会发生并使得它们能够被迅速的解决。
+为了防止一开始就出现分裂的投票，选举的超时时间是从一个固定的间隔中被随机选取的(例如150-300ms)。
+这打散了服务器使得在大多数情况下只有单独一个服务器将会超时；它赢得选举并且在其它服务器超时之前发送心跳(译者注：超时后自己就会在别的服务器没反应过来前发起新一轮任期更大的投票，让别人都投给它来赢得选举)。
+同样的机制也被用于解决分裂的投票。
+每个candidate在一轮选举开始时会重新随机的设置其选举超时时间，并且在下一轮选举前等待直到超时；这减少了在新的选举中再一次出现分裂投票的可能性。
+第9.3节展示了该方法能迅速的选举出一个leader。
+
+#####
+![Figure6.png](Figure6.png)
+
+#####
+Elections are an example of how understandability guided our choice between design alternatives. 
+Initially we planned to use a ranking system: each candidate was assigned a unique rank, which was used to select between competing candidates.
+If a candidate discovered another candidate with higher rank, 
+it would return to follower state so that the higher ranking candidate could more easily win the next election. 
+We found that this approach created subtle issues around availability 
+(a lower-ranked server might need to time out and become a candidate again if a higher-ranked server fails,
+but if it does so too soon, it can reset progress towards electing a leader). 
+We made adjustments to the algorithm several times, but after each adjustment new corner cases appeared.
+Eventually we concluded that the randomized retry approach is more obvious and understandable.
+#####
+选举是一个可理解性如何指导我们在可选设计间进行选择的例子。
+最初，我们计划使用等级系统(ranking system)：每一个candidate都被分配一个唯一的等级，其用于在彼此竞争的candidate做选择。
+如果一个candidate发现了一个具有更高等级的candidate，它将返回到follower状态因此更好等级的candidate将更容易赢得下一次选举。
+但我们发现这个方法在可用性方面存在微妙的问题(如果一个高等级的服务器故障了，则一个低等级的服务器可能需要超时并再次成为candidate，但如果这样做的太早，它将会重置选举leader的进度)。
+我们对算法进行了数次调整，但每次调整后都出现了新的困境。
+最终我们得出结论，随机化重试的方法更显然且更容易被理解。
+
+### 5.3 Log replication(日志复制)
+Once a leader has been elected, it begins servicing client requests. 
+Each client request contains a command to be executed by the replicated state machines. 
+The leader appends the command to its log as a new entry, 
+then issues AppendEntries RPCs in parallel to each of the other servers to replicate the entry. 
+When the entry has been safely replicated (as described below), 
+the leader applies the entry to its state machine and returns the result of that execution to the client. 
+If followers crash or run slowly, or if network packets are lost, 
+the leader retries AppendEntries RPCs indefinitely (even after it has responded to the client) 
+until all followers eventually store all log entries.
+
+#####
+Logs are organized as shown in Figure 6. 
+Each log entry stores a state machine command along with the term number when the entry was received by the leader.
+The term numbers in log entries are used to detect inconsistencies between logs and to ensure some of the properties in Figure 3. 
+Each log entry also has an integer index identifying its position in the log.
+
+#####
+The leader decides when it is safe to apply a log entry to the state machines; such an entry is called committed.
+Raft guarantees that committed entries are durable and will eventually be executed by all of the available state machines.
+A log entry is committed once the leader that created the entry has replicated it on a majority of the servers (e.g., entry 7 in Figure 6).
+This also commits all preceding entries in the leader’s log, including entries created by previous leaders. 
+Section 5.4 discusses some subtleties when applying this rule after leader changes,
+and it also shows that this definition of commitment is safe. 
+The leader keeps track of the highest index it knows to be committed,
+and it includes that index in future AppendEntries RPCs (including heartbeats) so that the other servers eventually find out. 
+Once a follower learns that a log entry is committed, it applies the entry to its local state machine (in log order).
+
+#####
+We designed the Raft log mechanism to maintain a high level of coherency between the logs on different servers.
+Not only does this simplify the system’s behavior and make it more predictable, but it is an important component of ensuring safety.
+Raft maintains the following properties, which together constitute the Log Matching Property in Figure 3:
+* If two entries in different logs have the same index and term, then they store the same command.
+* If two entries in different logs have the same index and term, then the logs are identical in all preceding entries.
+
+#####
+The first property follows from the fact that a leader creates at most one entry with a given log index in a given term, 
+and log entries never change their position in the log.
+The second property is guaranteed by a simple consistency check performed by AppendEntries.
+When sending an AppendEntries RPC, the leader includes the index and term of the entry in its log that immediately precedes the new entries. 
+If the follower does not find an entry in its log with the same index and term, then it refuses the new entries. 
+The consistency check acts as an induction step: the initial empty state of the logs satisfies the Log Matching Property,
+and the consistency check preserves the Log Matching Property whenever logs are extended.
+As a result, whenever AppendEntries returns successfully, 
+the leader knows that the follower’s log is identical to its own log up through the new entries.
+
+#####
+During normal operation, the logs of the leader and followers stay consistent,
+so the AppendEntries consistency check never fails. 
+However, leader crashes can leave the logs inconsistent (the old leader may not have fully replicated all of the entries in its log). 
+These inconsistencies can compound over a series of leader and follower crashes.
+Figure 7 illustrates the ways in which followers’ logs may differ from that of a new leader.
+A follower may be missing entries that are present on the leader, it may have extra entries that are not present on the leader, or both.
+Missing and extraneous entries in a log may span multiple terms.
+
+![Figure7.png](Figure7.png)
+
+#####
+In Raft, the leader handles inconsistencies by forcing the followers’ logs to duplicate its own. 
+This means that conflicting entries in follower logs will be overwritten with entries from the leader’s log. 
+Section 5.4 will show that this is safe when coupled with one more restriction.
+
+#####
+To bring a follower’s log into consistency with its own, the leader must find the latest log entry where the two logs agree, 
+delete any entries in the follower’s log after that point, and send the follower all of the leader’s entries after that point. 
+All of these actions happen in response to the consistency check performed by AppendEntries RPCs.
+The leader maintains a nextIndex for each follower, which is the index of the next log entry the leader will send to that follower. 
+When a leader first comes to power, it initializes all nextIndex values to the index just after the last one in its log (11 in Figure 7). 
+If a follower’s log is inconsistent with the leader’s, 
+the AppendEntries consistency check will fail in the next AppendEntries RPC. 
+After a rejection, the leader decrements nextIndex and retries the AppendEntries RPC.
+Eventually nextIndex will reach a point where the leader and follower logs match.
+When this happens, AppendEntries will succeed, 
+which removes any conflicting entries in the follower’s log and appends entries from the leader’s log (if any). 
+Once AppendEntries succeeds, the follower’s log is consistent with the leader’s, and it will remain that way for the rest of the term.
+
+#####
+If desired, the protocol can be optimized to reduce the number of rejected AppendEntries RPCs. 
+For example, when rejecting an AppendEntries request, 
+the follower can include the term of the conflicting entry and the first index it stores for that term. With this information, 
+the leader can decrement nextIndex to bypass all of the conflicting entries in that term; 
+one AppendEntries RPC will be required for each term with conflicting entries, rather than one RPC per entry.
+In practice, we doubt this optimization is necessary, 
+since failures happen infrequently and it is unlikely that there will be many inconsistent entries.
+
+#####
+With this mechanism, a leader does not need to take any special actions to restore log consistency when it comes to power. 
+It just begins normal operation, and the logs automatically converge in response to failures of the AppendEntries consistency check. 
+A leader never overwrites or deletes entries in its own log (the Leader Append-Only Property in Figure 3).
+
+#####
+This log replication mechanism exhibits the desirable consensus properties described in Section 2: 
+Raft can accept, replicate, and apply new log entries as long as a majority of the servers are up; 
+in the normal case a new entry can be replicated with a single round of RPCs to a majority of the cluster; 
+and a single slow follower will not impact performance.
+
+### 

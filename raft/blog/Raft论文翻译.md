@@ -201,7 +201,6 @@ Paxos首先定义了一个协议，其能够就单个决定达成一致，例如
 Paxos同时保证了安全性和活性，并且支持集群成员的变更。
 其正确性已经得到证明，并且在通常情况下是高效的。
 
-
 #####
 Unfortunately, Paxos has two significant drawbacks.
 The first drawback is that Paxos is exceptionally difficult to understand. 
@@ -573,6 +572,7 @@ Eventually we concluded that the randomized retry approach is more obvious and u
 最终我们得出结论，随机化重试的方法更显然且更容易被理解。
 
 ### 5.3 Log replication(日志复制)
+#####
 Once a leader has been elected, it begins servicing client requests. 
 Each client request contains a command to be executed by the replicated state machines. 
 The leader appends the command to its log as a new entry, 
@@ -582,12 +582,24 @@ the leader applies the entry to its state machine and returns the result of that
 If followers crash or run slowly, or if network packets are lost, 
 the leader retries AppendEntries RPCs indefinitely (even after it has responded to the client) 
 until all followers eventually store all log entries.
+#####
+一旦一个leader被选举出来，它将开始服务于客户端的请求。
+每一个客户端的请求都包含了一个被用于在复制状态机上执行的指令。
+leader将指令作为一个新的条目追加到其日志中，然后向其它的每个服务器发起并行的AppendEntries RPC令它们复制这一条目。
+当条目已被安全的被复制(如下所述)，leader在它的状态机上应用这一条目并且将执行的结果返回给客户端。
+如果follower崩溃了或者运行的很慢，或者网络失包，leader会无限的重试AppendEntries RPC(即使在响应了客户端的请求之后)，
+直到所有的follower最终都存储了所有的日志条目。
 
 #####
 Logs are organized as shown in Figure 6. 
 Each log entry stores a state machine command along with the term number when the entry was received by the leader.
 The term numbers in log entries are used to detect inconsistencies between logs and to ensure some of the properties in Figure 3. 
 Each log entry also has an integer index identifying its position in the log.
+#####
+日志如图6所示的方式被组织。
+每一个日志条目存储了一个状态机的指令，以及从leader处接受条目时的任期编号。
+日志条目中的任期编号被用于检测日志间的不一致，并且用于保证图3中的一些特性。
+每个日志条目也有一个整数的索引标识其在日志中的位置。
 
 #####
 The leader decides when it is safe to apply a log entry to the state machines; such an entry is called committed.
@@ -599,6 +611,14 @@ and it also shows that this definition of commitment is safe.
 The leader keeps track of the highest index it knows to be committed,
 and it includes that index in future AppendEntries RPCs (including heartbeats) so that the other servers eventually find out. 
 Once a follower learns that a log entry is committed, it applies the entry to its local state machine (in log order).
+#####
+leader决定何时能安全的在状态机上应用日志条目；这样的条目被称作已提交的日志。
+Raft保证已提交的条目都会被持久化并且最终将会在所有可用的状态机上被执行。
+一旦被创建的条目被大多数服务器所复制，leader就会将其提交(例如，图6中的条目7)。
+同时也会提交leader日志中更早之前的所有条目，其中包括被前任leader们所创建的条目。
+第5.4节讨论了在领导者变更时应用这一规则的微妙之处，同时它也证明了所承诺的定义是安全的。
+leader持续的跟踪它已知的被提交日志的最大索引值，并且将索引值包含在未来的AppendEntries RPC中(包括心跳)，以便其它的服务器最终能知道(最大编号的已提交索引)。
+一旦一个追随者知道一个日志条目已被提交，它便将这一条目应用于本地的状态机(基于日志的顺序)。
 
 #####
 We designed the Raft log mechanism to maintain a high level of coherency between the logs on different servers.
@@ -606,6 +626,12 @@ Not only does this simplify the system’s behavior and make it more predictable
 Raft maintains the following properties, which together constitute the Log Matching Property in Figure 3:
 * If two entries in different logs have the same index and term, then they store the same command.
 * If two entries in different logs have the same index and term, then the logs are identical in all preceding entries.
+#####
+我们设计了Raft日志机制，其用于维持不同服务器之间日志的高度一致。
+其不仅仅简化了系统的行为，还使得它更加的可预测，同时这也是确保安全性的重要部分。
+Raft维护着以下特性，这些特性一并组成了图3中的日志匹配特性(Log Matching Property)：
+* 如果不同日志中的两个条目有着相同的索引值和任期，则它们存储着相同的指令。
+* 如果不同日志中的两个条目有着相同的索引值和任期，则该日志之前的所有条目也都是完全相同的。
 
 #####
 The first property follows from the fact that a leader creates at most one entry with a given log index in a given term, 
@@ -617,6 +643,13 @@ The consistency check acts as an induction step: the initial empty state of the 
 and the consistency check preserves the Log Matching Property whenever logs are extended.
 As a result, whenever AppendEntries returns successfully, 
 the leader knows that the follower’s log is identical to its own log up through the new entries.
+#####
+第一个特性源自这样一个事实，即一个leader只会在特定任期内的某一索引值下最多只会创建一个条目，并且日志条目在日志中的位置是永远不会改变的。
+第二个特性则由AppendEntries执行一个简单的一致性检查来保证。
+当发送AppendEntries RPC时，leader将前一个条目的索引和任期包含在新条目中。
+如果follower没有找到一个具有相同索引值和任期的日志条目，则它将拒绝这一新条目。
+一致性检查就像一个归纳的步骤:初始化时的空状态满足日志匹配的特性(Log Matching Property)，并且每当扩展日志时，一致性检查都会维持日志匹配的特性。
+因此，每当AppendEntries返回成功时，通过新的条目leader就知道follower的日志与leader自己的是完全一致的，
 
 #####
 During normal operation, the logs of the leader and followers stay consistent,

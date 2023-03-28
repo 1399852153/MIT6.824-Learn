@@ -743,6 +743,11 @@ that each state machine executes exactly the same commands in the same order.
 For example, a follower might be unavailable while the leader commits several log entries,
 then it could be elected leader and overwrite these entries with new ones; 
 as a result, different state machines might execute different command sequences.
+#####
+前面的章节描述了Raft是如何选举leader和复制日志条目的。
+然而，目前为止已描述的机制还不足以确保每一个状态机以相同的顺序准确地执行相同的指令。
+例如，当leader提交了几个日志条目后一个follower可能会变得不可用，随后follower可以被选举为leader并且用新的条目覆盖这些条目；
+因此，不同的状态机可能会执行不同的指令序列。
 
 #####
 This section completes the Raft algorithm by adding a restriction on which servers may be elected leader.
@@ -751,6 +756,11 @@ The restriction ensures that the leader for any given term contains all of the e
 Given the election restriction, we then make the rules for commitment more precise.
 Finally, we present a proof sketch for the Leader Completeness Property 
 and show how it leads to correct behavior of the replicated state machine.
+#####
+这一节通过增加一个对哪些服务器可以被选举为leader的限制来完善Raft算法。
+该限制确保leader对于给定的任期，其包含了所有之前任期的已提交条目（图3中的leader Completeness特性）。
+有了选举的限制，我们也使得关于提交的规则变得更加清晰。
+最后，我们给出了关于Leader Completeness的简要证明，并且展示了它是如何让复制状态机执行正确行为的。
 
 ### 5.4.1 Election restriction(选举限制)
 In any leader-based consensus algorithm, the leader must eventually store all of the committed log entries. 
@@ -764,6 +774,13 @@ that all the committed entries from previous terms are present on each new leade
 without the need to transfer those entries to the leader.
 This means that log entries only flow in one direction, from leaders to followers,
 and leaders never overwrite existing entries in their logs.
+#####
+在任何基于leader的一致性算法中，leader必须最终存储所有已提交的日志条目。
+在一些一致性算法中，例如Viewstamped Replication，一个leader即使最初不包含所有已提交的条目也能被选举为leader。
+这些算法包含了额外的机制来识别缺失的条目并在选举过程中或选举后不久将其传输给新的leader。
+不幸的是，这带来了非常多的额外机制和复杂性。
+Raft使用了一种更简单的方法来确保每一个新的leader当选时都拥有之前任期的所有已提交的条目，而无需传输这些条目给leader。
+这意味着日志条目只会单方向的从leader向follower流动，并且leader从不覆盖它们已存在的条目。
 
 #####
 Raft uses the voting process to prevent a candidate from winning an election unless its log contains all committed entries.
@@ -773,17 +790,24 @@ If the candidate’s log is at least as up-to-date as any other log in that majo
 (where “up-to-date” is defined precisely below), then it will hold all the committed entries. 
 The RequestVote RPC implements this restriction: the RPC includes information about the candidate’s log, 
 and the voter denies its vote if its own log is more up-to-date than that of the candidate.
+#####
+Raft使用投票机制来防止不包含所有已提交条目的candidate赢得选举。
+一个candidate必须与集群中的大多数成员联系后才能当选，这意味着每个提交的条目必须至少存在于其中的至少一个服务器中。
+如果candidate的日志至少和其它大多数的日志一样新(何为"最新"(up-to-date)将在下面被定义)，则它将持有所有已提交的条目。
+RequestVote RPC中实现了之一限制：RPC包括了candidate的日志信息，并且如果candidate的日志不如投票人(voter)的日志新，则voter将拒绝投票给该candidate。
 
 #####
 Raft determines which of two logs is more up-to-date by comparing the index and term of the last entries in the logs. 
 If the logs have last entries with different terms, then the log with the later term is more up-to-date.
 If the logs end with the same term, then whichever log is longer is more up-to-date.
+#####
+Raft通过比较两个日志中最后一个条目的索引和任期来决定谁是最新的。
+如果两个日志中最后的条目有着不同的任期，则任期较后的日志是更新的。
+如果两个日志中最后的条目有着相同的任期，则较长的(注：索引值更大的)那个日志是更新的。
 
 ![Figure8.png](Figure8.png)
 
-
 ### 5.4.2 Committing entries from previous terms
-
 As described in Section 5.3, a leader knows that an entry from its current term is committed once
 that entry is stored on a majority of the servers. 
 If a leader crashes before committing an entry, future leaders will attempt to finish replicating the entry. 

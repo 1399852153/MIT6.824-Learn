@@ -814,6 +814,11 @@ If a leader crashes before committing an entry, future leaders will attempt to f
 However, a leader cannot immediately conclude that an entry from a previous term is committed once it is stored on a majority of servers. 
 Figure 8 illustrates a situation where an old log entry is stored on a majority of servers, 
 yet can still be overwritten by a future leader.
+#####
+如5.3节所描述的那样，leader一旦知道当前任期内的一个条目被存储在了大多数的服务器中，就会将其提交。
+如果leader在提交一个条目前崩溃了，未来的leader将试图去完成该条目的复制。
+然而，leader无法立即得出结论，即一个来自之前任期的条目一旦被大多数服务器所存储就是已被提交的。
+图8展示了这样一种情况，一个老的日志条目被存储在了大多数的服务器上，但任然被未来的leader覆盖掉了。
 
 ![Figure9.png](Figure9.png)
 #####
@@ -823,14 +828,23 @@ once an entry from the current term has been committed in this way,
 then all prior entries are committed indirectly because of the Log Matching Property. 
 There are some situations where a leader could safely conclude that an older log entry is committed 
 (for example, if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.
+#####
+为了消除像图8中那样的问题，Raft从来不基于副本数量来提交来自之前任期的日志条目。
+只有来自leader当前任期的日志条目才基于副本数量被提交，一旦一个来自当前任期的条目以这种方式被提交，则所有之前的条目都将由于Log Matching特性而间接的被提交。
+在一些情况下，leader可以安全的断定一个之前的log已经被提交(比如，如果一个entry已经被存储在每一个服务器上了)，但为了简单起见，Raft采取了一种更保守的方法。
 
 #####
 Raft incurs this extra complexity in the commitment rules because log entries retain their original term numbers
 when a leader replicates entries from previous terms. 
-In other consensus algorithms, if a new leader rereplicates entries from prior “terms,” it must do so with its new “term number.”
+In other consensus algorithms, if a new leader re-replicates entries from prior “terms,” it must do so with its new “term number.”
 Raft’s approach makes it easier to reason about log entries, since they maintain the same term number over time and across logs.
 In addition, new leaders in Raft send fewer log entries from previous terms
 than in other algorithms (other algorithms must send redundant log entries to renumber them before they can be committed).
+#####
+Raft向提交规则中引入了额外的复杂性，因为当leader复制来自之前任期的条目时，这些日志条目会保留它原始的任期编号。
+在其它一致性算法中，如果一个新的leader要重新复制来自之前任期的条目，它必须使用新的任期编号。
+Raft的方法使得更容易理解日志条目，因为它们在不同服务器的日志中自始至终保留了相同的任期编号。
+额外的，相比其它算法，raft中的新leader会发送更少的来自之前任期的日志条目(其它算法必须发送冗余的日志条目以对让对应的日志条目在提交前重新进行编号)。
 
 ### 5.4.3 Safety argument(安全性参数)
 Given the complete Raft algorithm, 
@@ -838,11 +852,17 @@ we can now argue more precisely that the Leader Completeness Property holds (thi
 We assume that the Leader Completeness Property does not hold, then we prove a contradiction.
 Suppose the leader for term T (leaderT) commits a log entry from its term, but that log entry is not stored by the leader of some future term.
 Consider the smallest term U > T whose leader (leaderU) does not store the entry.
+#####
+在给出了完整的Raft算法后，我们可以更加准确的讨论leader的完整性(Completeness)特性是否成立了(这一讨论基于9.2节的安全性证明)。
+我们假设leader的Completeness特性不成立，则我们可以推到出矛盾来。
+假设任期T的leader(leaderT)提交了一个来自当前任期的日志条目，但该日志条目没有被未来某些任期的leader所存储。
+考虑一个大于T的最小任期U，其leader(leaderU)没有存储这个条目。
 
+#####
 1. The committed entry must have been absent from leaderU’s log at the time of its election (leaders never delete or overwrite entries).
 2. leaderT replicated the entry on a majority of the cluster, and leaderU received votes from a majority of the cluster. 
-   Thus, at least one server (“the voter”) both accepted the entry from leaderT and voted for leaderU,
-   as shown in Figure 9. The voter is key to reaching a contradiction.
+   Thus, at least one server (“the voter”) both accepted the entry from leaderT and voted for leaderU, as shown in Figure 9. 
+   The voter is key to reaching a contradiction.
 3. The voter must have accepted the committed entry from leaderT before voting for leaderU; 
    otherwise it would have rejected the AppendEntries request from leaderT (its current term would have been higher than T).
 4. The voter still stored the entry when it voted for leaderU, since every intervening leader contained the entry (by assumption), 
@@ -860,6 +880,11 @@ Consider the smallest term U > T whose leader (leaderU) does not store the entry
    that are committed in term T.
 9. The Log Matching Property guarantees that future leaders will also contain entries that are committed indirectly,
    such as index 2 in Figure 8(d).
+#####
+1. 已提交的条目在leaderU当选时，必须不在leaderU的日志中(leader从来不会删除或者覆盖条目)。
+2. leaderT将对应条目复制到了集群中的大多数(服务器)中,并且leaderU获得了来自集群中的大多的选票。
+   因此，至少有一个服务器(作为voter)同时接收到了来自leaderT的条目并且投票给了leaderU.如图9所示。该voter是达成矛盾的关键所在。
+
 
 #####
 Given the Leader Completeness Property, we can prove the State Machine Safety Property from Figure 3,
@@ -876,6 +901,3 @@ Thus, the State Machine Safety Property holds.
 Finally, Raft requires servers to apply entries in log index order. 
 Combined with the State Machine Safety Property, 
 this means that all servers will apply exactly the same set of log entries to their state machines, in the same order.
-
-
-

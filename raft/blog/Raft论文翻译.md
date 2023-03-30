@@ -884,7 +884,20 @@ Consider the smallest term U > T whose leader (leaderU) does not store the entry
 1. 已提交的条目在leaderU当选时，必须不在leaderU的日志中(leader从来不会删除或者覆盖条目)。
 2. leaderT将对应条目复制到了集群中的大多数(服务器)中,并且leaderU获得了来自集群中的大多的选票。
    因此，至少有一个服务器(作为voter)同时接收到了来自leaderT的条目并且投票给了leaderU.如图9所示。该voter是达成矛盾的关键所在。
-
+3. voter必须在投票给leaderU之前接受来自leaderT的已提交的条目;
+   否则其将拒绝来自leaderT的AppendEntries request(它当前的任期将已经高于T)。
+4. voter在投票给leaderU时依然存储了该条目，因为每一个介于其中的leader(任期位于T和U之间)都包含了该条目，
+   leader从不移除条目，并且follower只移除与leader相冲突的条目。
+5. voter同意投票给leaderU,因此leaderU的日志必须至少与voter是一样新的。这带来了以下两个矛盾中的一个。
+6. 首先，如果voter和leaderU的最后一个日志有着相同的任期，则leaderU的日志必须至少与voter一样长，
+   因此leaderU的日志包含了voter日志中的每一个条目。
+   这是矛盾的，因为voter包含了已提交的条目而leaderU被假设为没有包含。
+7. 否则leaderU的最后一个日志的任期就必须比voter要大了。
+   此外，任期的值也大于T，因为voter的最后一个日志的任期至少是T(其包含了来自任期T的所有已提交条目)。
+   创建leaderU最后一个日志条目的更早的leader也必须包含这个日志(假设)。
+   然后，基于Log Matching特性，leaderU的日志必须也包含已提交的条目，这是一个矛盾。
+8. 这就终结了矛盾。因此，所有任期大于T的leader必须包含所有的任期T内的已提交条目。
+9. Log Matching特性保证了未来的leader也包含间接提交的日志，就像图8中的索引2。
 
 #####
 Given the Leader Completeness Property, we can prove the State Machine Safety Property from Figure 3,
@@ -896,8 +909,68 @@ Now consider the lowest term in which any server applies a given log index;
 the Log Completeness Property guarantees that the leaders for all higher terms will store that same log entry, 
 so servers that apply the index in later terms will apply the same value.
 Thus, the State Machine Safety Property holds.
+#####
+通过Leader Completeness特性，我们可以证明来自图3的State Machine Safety(安全状态机)特性，
+如果服务器将给定索引日志条目作用于状态机，其它的服务器将不能在相同的索引处应用不同的日志条目。
+一旦服务器应用了一个日志条目到其状态机上，其日志必须与传递该条目的leader的日志完全一样，并且这个条目必须被提交。
+现在考虑任一服务器应用给定日志索引的最小任期，Log Completeness特性保证了所有更高任期的leader将存储相同的日志条目，所以服务器在最晚任期所应用的索引将作用于相同的值。
+因此，State Machine Safety特性是成立的。
 
 #####
 Finally, Raft requires servers to apply entries in log index order. 
 Combined with the State Machine Safety Property, 
 this means that all servers will apply exactly the same set of log entries to their state machines, in the same order.
+#####
+最后，Raft要求服务器按照日志索引的顺序应用日志条目。
+结合State Machine Safety特性，这意味着所有的服务器将精确的以相同的顺序为它们的状态机应用一个相同的日志条目集合。
+
+### 5.5 Follower and candidate crashes(follower和candidate崩溃)
+Until this point we have focused on leader failures. 
+Follower and candidate crashes are much simpler to handle than leader crashes, and they are both handled in the same way. 
+If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will fail. 
+Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete successfully. 
+If a server crashes after completing an RPC but before responding, then it will receive the same RPC again after it restarts. 
+Raft RPCs are idempotent, so this causes no harm. 
+For example, if a follower receives an AppendEntries request that includes log entries already present in its log, 
+it ignores those entries in the new request.
+#####
+在此之前我们一直聚焦于leader出故障的情况。
+follower和candidate的崩溃比起leader的崩溃会更加容易处理，并且它们都以相同的方式被处理。
+如果一个follower或者candidate崩溃了，则未来发送给它的投票请求(RequestVote)和AppendEntries RPC的发送将会失败。
+Raft通过无限的重试来处理这些失败，如果已崩溃的服务器重启了，则RPC将会成功的完成。
+如果服务器在完成了一个RPC但是在进行响应之前崩溃了，则它将会在重启后再一次接受到相同的RPC。
+Raft的RPC是幂等的，所以这不会有问题。
+例如，如果一个follower接受到的一个AppendEntries请求中包含的日志条目已经在它自己的日志中了，该follower就会在这次新的请求中忽略掉这些条目。
+
+##### 5.6 Timing and availability(时机和可用性)
+One of our requirements for Raft is that safety must not depend on timing: 
+the system must not produce incorrect results just because some event happens more quickly or slowly than expected. 
+However, availability (the ability of the system to respond to clients in a timely manner) must inevitably depend on timing. 
+For example, if message exchanges take longer than the typical time between server crashes,
+candidates will not stay up long enough to win an election; without a steady leader, Raft cannot make progress.
+
+#####
+Leader election is the aspect of Raft where timing is most critical.
+Raft will be able to elect and maintain a steady leader as long as the system satisfies the following timing requirement:
+broadcastTime ≪ electionTimeout ≪ MTBF
+
+#####
+In this inequality broadcastTime is the average time it takes a server to send RPCs in parallel to every server
+in the cluster and receive their responses; 
+electionTimeout is the election timeout described in Section 5.2; 
+and MTBF is the average time between failures for a single server. 
+The broadcast time should be an order of magnitude less than the election timeout so
+that leaders can reliably send the heartbeat messages required to keep followers from starting elections; 
+given the randomized approach used for election timeouts, this inequality also makes split votes unlikely.
+The election timeout should be a few orders of magnitude less than MTBF so that the system makes steady progress.
+When the leader crashes, the system will be unavailable for roughly the election timeout;
+we would like this to represent only a small fraction of overall time.
+
+#####
+The broadcast time and MTBF are properties of the underlying system, while the election timeout is something we must choose. 
+Raft’s RPCs typically require the recipient to persist information to stable storage, 
+so the broadcast time may range from 0.5ms to 20ms, depending on storage technology.
+As a result, the election timeout is likely to be somewhere between 10ms and 500ms. 
+Typical server MTBFs are several months or more, which easily satisfies the timing requirement.
+
+![Figure10.png](Figure10.png)

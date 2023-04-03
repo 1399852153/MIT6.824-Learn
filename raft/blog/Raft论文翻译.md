@@ -942,17 +942,25 @@ Raft通过无限的重试来处理这些失败，如果已崩溃的服务器重�
 Raft的RPC是幂等的，所以这不会有问题。
 例如，如果一个follower接受到的一个AppendEntries请求中包含的日志条目已经在它自己的日志中了，该follower就会在这次新的请求中忽略掉这些条目。
 
-##### 5.6 Timing and availability(时机和可用性)
+##### 5.6 Timing and availability(时间和可用性)
 One of our requirements for Raft is that safety must not depend on timing: 
 the system must not produce incorrect results just because some event happens more quickly or slowly than expected. 
 However, availability (the ability of the system to respond to clients in a timely manner) must inevitably depend on timing. 
 For example, if message exchanges take longer than the typical time between server crashes,
 candidates will not stay up long enough to win an election; without a steady leader, Raft cannot make progress.
+#####
+我们对Raft的要求之一是安全性不得依赖时间：系统不能因为一些事件比所期望的更快或更慢发生而产生不正确的结果。
+然而，可用性(系统及时响应客户端的能力)一定不可避免的依赖于时间。
+例如，如果消息交换所花费的时间比服务器崩溃时所花费的时间还长，candidates将无法一直等待以赢得一场选举；没有一个稳定的leader，Raft就无法工作。
 
 #####
 Leader election is the aspect of Raft where timing is most critical.
 Raft will be able to elect and maintain a steady leader as long as the system satisfies the following timing requirement:
 broadcastTime ≪ electionTimeout ≪ MTBF
+#####
+leader选举是Raft关于时间的最关键的方面。
+只要系统能满足以下时间的需求，Raft将能够选出并且维持一个稳定的leader：
+广播时间(broadcastTime) ≪ 选举超时时间(electionTimeout) ≪ 平均故障间隔时间(MTBF: Mean Time between Failures)
 
 #####
 In this inequality broadcastTime is the average time it takes a server to send RPCs in parallel to every server
@@ -965,6 +973,13 @@ given the randomized approach used for election timeouts, this inequality also m
 The election timeout should be a few orders of magnitude less than MTBF so that the system makes steady progress.
 When the leader crashes, the system will be unavailable for roughly the election timeout;
 we would like this to represent only a small fraction of overall time.
+#####
+在这个不等式中，广播时间是服务器并行发送RPC给集群中的每一个服务器并且接受到它们的响应所花费的时间；
+选举超时时间是在5.2节中所描述的选举超时时间；同时MTBF是对于单一服务器在两次故障间隔的平均时间。
+广播时间应该比选举超时时间小一个数量级因此leader可以可靠的发送所需的心跳信息来阻止follower开始选举；
+考虑到用于选举超时的随机化风阀，这个不等式也使得不太可能出现投票分裂。
+选举超时时间必须比MTBF低几个数量级才能使得系统能稳定的运行。
+当leader崩溃时，系统将有大致等于选举超时时间左右的不可用时间，我们希望这只占用整个(工作)时间的一小部分。
 
 #####
 The broadcast time and MTBF are properties of the underlying system, while the election timeout is something we must choose. 
@@ -972,5 +987,121 @@ Raft’s RPCs typically require the recipient to persist information to stable s
 so the broadcast time may range from 0.5ms to 20ms, depending on storage technology.
 As a result, the election timeout is likely to be somewhere between 10ms and 500ms. 
 Typical server MTBFs are several months or more, which easily satisfies the timing requirement.
+#####
+广播时间和平均故障间隔时间是底层系统的特性，只有选举超时时间是我们必须选择的。
+Raft的RPC通常需要接收方将信息持久化到稳定的存储介质中，所以广播时间可能在0.5ms到20ms之间，这取决于存储技术。
+因此，选举时间可能在10ms到500ms之间。
+典型的服务器平均故障间隔时间是几个月或者更多，因此对这一时间(的要求)很容易满足。
 
 ![Figure10.png](Figure10.png)
+
+### 6 Cluster membership changes(集群成员变更)
+Up until now we have assumed that the cluster configuration (the set of servers participating in the consensus algorithm) is fixed.
+In practice, it will occasionally be necessary to change the configuration, 
+for example to replace servers when they fail or to change the degree of replication.
+Although this can be done by taking the entire cluster off-line, updating configuration files,
+and then restarting the cluster, this would leave the cluster unavailable during the changeover. 
+In addition, if there are any manual steps, they risk operator error.
+In order to avoid these issues, we decided to automate configuration changes and incorporate them into the Raft consensus algorithm.
+#####
+到目前为止，我们已经假设集群的配置(参与一致性算法的服务器集合)是固定的。
+在实践中，偶尔的改变配置是必须的，例如在服务器发生故障时进行替换或者改变复制的程度。
+尽管这可以通过使整个集群离线，更新配置文件并且随后重启集群来实现，但这也使得集群在转换过程中变得不可用。
+另外，如果有任何的手工步骤，则有管理员操作失误的风险。
+为了避免这些问题，我们决定将配置的变更自动化并且将其纳入到Raft一致性算法中。
+
+#####
+For the configuration change mechanism to be safe,
+there must be no point during the transition where it is possible for two leaders to be elected for the same term. 
+Unfortunately, any approach where servers switch directly from the old configuration to the new configuration is unsafe.
+It isn’t possible to atomically switch all of the servers at once, 
+so the cluster can potentially split into two independent majorities during the transition (see Figure 10).
+#####
+为了使得配置变更的过程是安全的，在转换的过程中必须保证不能在同一个任期内选举出两个leader。
+不幸的是，任何将旧配置直接切换到新配置的方法都是不安全的。
+不可能原子性的一次性切换所有的服务器，因此服务器可能在转换期间被切分为两个独立的多数(如图10所示)。
+
+#####
+In order to ensure safety, configuration changes must use a two-phase approach. 
+There are a variety of ways to implement the two phases. 
+For example, some systems(e.g., [22]) use the first phase to disable the old configuration so it cannot process client requests; 
+then the second phase enables the new configuration.
+In Raft the cluster first switches to a transitional configuration we call joint consensus;
+once the joint consensus has been committed, the system then transitions to the new configuration. 
+The joint consensus combines both the old and new configurations:
+
+* Log entries are replicated to all servers in both configurations.
+* Any server from either configuration may serve as leader
+* Agreement (for elections and entry commitment) requires separate majorities from both the old and new configurations.
+
+![Figure11.png](Figure11.png)
+#####
+为了确保安全，配置的变更必须使用一种两阶段的方法。
+有很多方法可以实现两阶段。
+例如，一些系统通过在一阶段禁用旧的配置因此其无法处理客户端请求，然后二阶段则启用新的配置。
+在Raft的集群首先切换到我们成为联合一致(joint consensus)的过渡配置;一旦联合一致已被提交，系统便过度到新的配置。
+联合一致结合了旧的和新的配置：
+* 日志条目都会被复制到在这两种配置中所有的服务器上。
+* 新、旧配置中的任一服务器都可以作为leader。
+* (对于选举和条目提交)达成一致需要在新的和旧的配置中分别获得大多数服务器的同意。
+
+
+#####
+The joint consensus allows individual servers to transition between configurations at different times without compromising safety.
+Furthermore, joint consensus allows the cluster to continue servicing client requests throughout the configuration change.
+
+#####
+Cluster configurations are stored and communicated using special entries in the replicated log;
+Figure 11 illustrates the configuration change process.
+When the leader receives a request to change the configuration from C*old* to C*new*, 
+it stores the configuration for joint consensus(C*old,new* in the figure) as a log entry and replicates that
+entry using the mechanisms described previously.
+Once a given server adds the new configuration entry to its log, it uses that configuration for all future decisions 
+(a server always uses the latest configuration in its log, regardless of whether the entry is committed). 
+This means that the leader will use the rules of C*old,new* to determine when the log entry for C*old,new* is committed.
+If the leader crashes, a new leader may be chosen under either C*old* or C*old,new*,
+depending on whether the winning candidate has received C*old,new*. 
+In any case, C*new* cannot make unilateral decisions during this period.
+
+#####
+Once C*old,new* has been committed, neither C*old* nor C*new* can make decisions without approval of the other, 
+and the Leader Completeness Property ensures that only servers with the C*old,new* log entry can be elected as leader.
+It is now safe for the leader to create a log entry describing C*new* and replicate it to the cluster.
+Again, this configuration will take effect on each server as soon as it is seen. 
+When the new configuration has been committed under the rules of C*new*, 
+the old configuration is irrelevant and servers not in the new configuration can be shut down. 
+As shown in Figure 11, there is no time when C*old* and C*new* can both make unilateral decisions; this guarantees safety.
+
+#####
+There are three more issues to address for reconfiguration. 
+The first issue is that new servers may not initially store any log entries.
+If they are added to the cluster in this state, it could take quite a while for them to catch up,
+during which time it might not be possible to commit new log entries.
+In order to avoid availability gaps, Raft introduces an additional phase before the configuration change, 
+in which the new servers join the cluster as non-voting members
+(the leader replicates log entries to them, but they are not considered for majorities). 
+Once the new servers have caught up with the rest of the cluster, the reconfiguration can proceed as described above.
+
+#####
+The second issue is that the cluster leader may not be part of the new configuration.
+In this case, the leader steps down (returns to follower state) once it has committed the C*new* log entry.
+This means that there will be a period of time (while it is committing C*new*) 
+when the leader is managing a cluster that does not include itself; it replicates log entries but does not count itself in majorities.
+The leader transition occurs when C*new* is committed
+because this is the first point when the new configuration can operate independently (it will always be possible to choose a leader from C*new*).
+Before this point, it may be the case that only a server from Cold can be elected leader.
+
+#####
+The third issue is that removed servers (those not in C*new*) can disrupt the cluster. 
+These servers will not receive heartbeats, so they will time out and start new elections.
+They will then send RequestVote RPCs with new term numbers, and this will cause the current leader to revert to follower state. 
+A new leader will eventually be elected, but the removed servers will time out again and the process will repeat, 
+resulting in poor availability.
+
+#####
+To prevent this problem, servers disregard RequestVote RPCs when they believe a current leader exists.
+Specifically, if a server receives a RequestVote RPC within the minimum election timeout of hearing from a current leader, 
+it does not update its term or grant its vote. 
+This does not affect normal elections, where each server waits at least a minimum election timeout before starting an election. 
+However, it helps avoid disruptions from removed servers: 
+if a leader is able to get heartbeats to its cluster, then it will not be deposed by larger term numbers.

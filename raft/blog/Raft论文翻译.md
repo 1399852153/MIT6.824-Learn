@@ -1045,10 +1045,12 @@ The joint consensus combines both the old and new configurations:
 * 新、旧配置中的任一服务器都可以作为leader。
 * (对于选举和条目提交)达成一致需要在新的和旧的配置中分别获得大多数服务器的同意。
 
-
 #####
 The joint consensus allows individual servers to transition between configurations at different times without compromising safety.
 Furthermore, joint consensus allows the cluster to continue servicing client requests throughout the configuration change.
+#####
+联合一致允许单独的服务器在不同的时间内转换配合而不会在安全性上有所妥协。
+此外，联合一致允许集群在配置变更的过程中持续的为客户端的请求提供服务。
 
 #####
 Cluster configurations are stored and communicated using special entries in the replicated log;
@@ -1062,6 +1064,14 @@ This means that the leader will use the rules of C*old,new* to determine when th
 If the leader crashes, a new leader may be chosen under either C*old* or C*old,new*,
 depending on whether the winning candidate has received C*old,new*. 
 In any case, C*new* cannot make unilateral decisions during this period.
+#####
+集群配置通过复制日志中特殊的条目进行存储和通信；图11展示了配置变更的过程。
+当leader接受到令配置从C*old*(旧配置)到C*new*(新配置)的请求时，
+它为了联合一致以一个日志条目的形式存储这个配置(图中的C*old,new*)并且使用之前所描述的机制复制这个条目。
+一旦给定的服务器将新的配置条目加入了它的日志，它将使用这些配置来指定未来所有的决定(一个服务器总是使用它日志中最后的配置，无论该条目是否是已提交的)。
+这意味着leader将使用规则C*old,new*来决定何时提交关于C*old,new*的日志条目。
+如果leader崩溃了，新的leader可能是在C*old*或者是C*old,new*下选择出来的，这取决于获胜的candidate是否已经收到了C*old,new*。
+无论如何，C*new*都不能在这个阶段单独的做出决定。
 
 #####
 Once C*old,new* has been committed, neither C*old* nor C*new* can make decisions without approval of the other, 
@@ -1071,6 +1081,13 @@ Again, this configuration will take effect on each server as soon as it is seen.
 When the new configuration has been committed under the rules of C*new*, 
 the old configuration is irrelevant and servers not in the new configuration can be shut down. 
 As shown in Figure 11, there is no time when C*old* and C*new* can both make unilateral decisions; this guarantees safety.
+#####
+一旦C*old,new*已经提交，C*old*或者C*new*都不能在没有另一方同意的情况下做出决定，
+并且Leader Completeness特性确保只有拥有C*old,new*日志条目的服务器才能被选举为leader。
+现在leader可以安全的创建一个描述了C*new*的日志条目并将其在集群中进行复制。
+同样的，该配置将在每一个服务器看到其后立即生效。
+当新的配置在C*new*的规则下被提交，旧的配置将变得无关紧要并且没有在新配置中的服务器将可以被关闭。
+如图11所示，C*old*和C*new*不能同时做出单独的决定；这保证了安全性。
 
 #####
 There are three more issues to address for reconfiguration. 
@@ -1081,6 +1098,13 @@ In order to avoid availability gaps, Raft introduces an additional phase before 
 in which the new servers join the cluster as non-voting members
 (the leader replicates log entries to them, but they are not considered for majorities). 
 Once the new servers have caught up with the rest of the cluster, the reconfiguration can proceed as described above.
+#####
+关于配置变更还存在三个问题需要解决。
+第一个问题是，新的服务器可能在初始化时没有存储任何的日志条目。
+如果在这种状态下被加入到集群，它可能需要花费很长一段时间才能赶上，在这段时间内都无法提交新的日志条目。
+为了避免可用性的差距，Raft在配置变更前引入了一个额外的阶段，新的服务器以无投票权成员(non-voting members)的身份加入集群
+(leader复制日志条目给它们，但它们不被认为是大多数的一份子)。
+一旦新的服务器能够追上集群中的其它机器，就可以向上述那般执行配置变更。
 
 #####
 The second issue is that the cluster leader may not be part of the new configuration.
@@ -1089,7 +1113,13 @@ This means that there will be a period of time (while it is committing C*new*)
 when the leader is managing a cluster that does not include itself; it replicates log entries but does not count itself in majorities.
 The leader transition occurs when C*new* is committed
 because this is the first point when the new configuration can operate independently (it will always be possible to choose a leader from C*new*).
-Before this point, it may be the case that only a server from Cold can be elected leader.
+Before this point, it may be the case that only a server from C*old* can be elected leader.
+#####
+第二个问题是，集群的leader可能不是新配置中的一员。
+在这种情况下，一旦C*new*日志条目被提交，leader将会退下(返回到follower状态)。
+这意味着存在一段时间(在提交C*new*时)，其中leader管理者一个不包含自己的集群；它复制着日志条目但不把它自己算作大多数中的一员。
+当C*new*被提交时将会发生leader的切换，因为这是新配置可以进行独立操作的第一个点位(总是可以在C*new*中选择出一个leader)。
+在此之前，只有来自C*old*的服务器才有可能被选举为leader。
 
 #####
 The third issue is that removed servers (those not in C*new*) can disrupt the cluster. 
@@ -1097,6 +1127,11 @@ These servers will not receive heartbeats, so they will time out and start new e
 They will then send RequestVote RPCs with new term numbers, and this will cause the current leader to revert to follower state. 
 A new leader will eventually be elected, but the removed servers will time out again and the process will repeat, 
 resulting in poor availability.
+#####
+第三个问题是被移除的服务器(不在C*new*中)可能会中断集群。
+这些服务器将不再接收到心跳，所以它们将会超时而启动新的选举。
+然后它们将发送有着新任期编号的RequestVote RPC，并且这将导致当前的leader恢复为follower状态。
+最终将会有一名新的leader被选举出来，但是被移除的服务器将会再次超时并且重复这一过程，这将导致系统有着较差的可用性。
 
 #####
 To prevent this problem, servers disregard RequestVote RPCs when they believe a current leader exists.
@@ -1105,3 +1140,100 @@ it does not update its term or grant its vote.
 This does not affect normal elections, where each server waits at least a minimum election timeout before starting an election. 
 However, it helps avoid disruptions from removed servers: 
 if a leader is able to get heartbeats to its cluster, then it will not be deposed by larger term numbers.
+#####
+为了避免这一问题，服务器将会在它们认为当前leader存在时忽略掉RequestVote RPC。
+特别的，如果一个服务器在当前leader最小的选举超时时间内接收到一个RequestVote RPC，它将不会更新它的任期或者发起投票。
+这不会影响正常的选举，即每一个服务器在开始一轮选举之前至少等待一个最小的选举超时时间。
+然而，它有助于避免移除服务器时的混乱：如果一个leader能够提供集群中的心跳，则它将不会被一个更大的任期编号给取代。
+
+### 7 Log compaction(日志压缩)
+Raft’s log grows during normal operation to incorporate more client requests, but in a practical system, it cannot grow without bound. 
+As the log grows longer, it occupies more space and takes more time to replay. 
+This will eventually cause availability problems without some mechanism to discard obsolete information that has accumulated in the log.
+#####
+Raft的日志在正常操作期间不断增长以满足更多的客户端请求，但是在实际的系统中，日志不能不加限制的增长。
+随着日志不断变长，它将占用更多的空间并且花费更长的事件来进行回放。
+如果没有一些机制来剔除日志中所累积的过时的信息，这终将造成可用性问题。
+
+#####
+Snapshotting is the simplest approach to compaction.
+In snapshotting, the entire current system state is written to a snapshot on stable storage, 
+then the entire log up to that point is discarded. Snapshotting is used in Chubby and ZooKeeper, 
+and the remainder of this section describes snapshotting in Raft.
+
+![Figure12.png](Figure12.png)
+
+#####
+Incremental approaches to compaction, such as log cleaning [36] and log-structured merge trees [30, 5], are also possible. 
+These operate on a fraction of the data at once, so they spread the load of compaction more evenly over time. 
+They first select a region of data that has accumulated many deleted and overwritten objects, 
+then they rewrite the live objects from that region more compactly and free the region.
+This requires significant additional mechanism and complexity compared to snapshotting,
+which simplifies the problem by always operating on the entire data set. While log cleaning would require modifications to Raft, 
+state machines can implement LSM trees using the same interface as snapshotting.
+
+#####
+Figure 12 shows the basic idea of snapshotting in Raft.
+Each server takes snapshots independently, covering just the committed entries in its log. 
+Most of the work consists of the state machine writing its current state to the snapshot.
+Raft also includes a small amount of metadata in the snapshot: 
+the _last included index_ is the index of the last entry in the log that the snapshot replaces 
+(the last entry the state machine had applied), and the _last included term_ is the term of this entry. 
+These are preserved to support the AppendEntries consistency check for the first log entry following the snapshot,
+since that entry needs a previous log index and term. 
+To enable cluster membership changes (Section 6), the snapshot also includes the latest configuration in the log as of last included index.
+Once a server completes writing a snapshot, it may delete all log entries up through the last included index, as well as any prior snapshot
+
+#####
+Although servers normally take snapshots independently, the leader must occasionally send snapshots to followers that lag behind.
+This happens when the leader has already discarded the next log entry that it needs to send to a follower. 
+Fortunately, this situation is unlikely in normal operation: a follower that has kept up with the leader would already have this entry. 
+However, an exceptionally slow follower or a new server joining the cluster(Section 6) would not.
+The way to bring such a follower up-to-date is for the leader to send it a snapshot over the network.
+
+![Figure13.png](Figure13.png)
+
+#####
+The leader uses a new RPC called InstallSnapshot to send snapshots to followers that are too far behind; see Figure 13. 
+When a follower receives a snapshot with this RPC, it must decide what to do with its existing log entries.
+Usually the snapshot will contain new information not already in the recipient’s log. 
+In this case, the follower discards its entire log; it is all superseded by the snapshot 
+and may possibly have uncommitted entries that conflict with the snapshot.
+If instead the follower receives a snapshot that describes a prefix of its log (due to retransmission or by mistake), 
+then log entries covered by the snapshot are deleted but entries following the snapshot are still valid and must be retained.
+
+#####
+This snapshotting approach departs from Raft’s strong leader principle, since followers can take snapshots without the knowledge of the leader.
+However, we think this departure is justified.
+While having a leader helps avoid conflicting decisions in reaching consensus, 
+consensus has already been reached when snapshotting, so no decisions conflict.
+Data still only flows from leaders to followers, just followers can now reorganize their data.
+
+#####
+We considered an alternative leader-based approach in which only the leader would create a snapshot,
+then it would send this snapshot to each of its followers.
+However, this has two disadvantages.
+First, sending the snapshot to each follower would waste network bandwidth and slow the snapshotting process. 
+Each follower already has the information needed to produce its own snapshots, 
+and it is typically much cheaper for a server to produce a snapshot from its local state than it is to send and receive one over the network.
+Second, the leader’s implementation would be more complex. 
+For example, the leader would need to send snapshots to followers in parallel with replicating new log entries to them,
+so as not to block new client requests.
+
+#####
+There are two more issues that impact snapshotting performance. 
+First, servers must decide when to snapshot. 
+If a server snapshots too often, it wastes disk bandwidth and energy; if it snapshots too infrequently, 
+it risks exhausting its storage capacity, and it increases the time required to replay the log during restarts.
+One simple strategy is to take a snapshot when the log reaches a fixed size in bytes.
+If this size is set to be significantly larger than the expected size of a snapshot, 
+then the disk bandwidth overhead for snapshotting will be small.
+
+#####
+The second performance issue is that writing a snapshot can take a significant amount of time, 
+and we do not want this to delay normal operations.
+The solution is to use copy-on-write techniques so that new updates can be accepted without impacting the snapshot being written.
+For example, state machines built with functional data structures naturally support this. 
+Alternatively, the operating system’s copy-on-write support (e.g., fork on Linux) 
+can be used to create an in-memory snapshot of the entire state machine (our implementation uses this approach).
+

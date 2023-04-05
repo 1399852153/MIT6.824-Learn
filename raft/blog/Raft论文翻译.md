@@ -1158,8 +1158,12 @@ Raft的日志在正常操作期间不断增长以满足更多的客户端请求�
 #####
 Snapshotting is the simplest approach to compaction.
 In snapshotting, the entire current system state is written to a snapshot on stable storage, 
-then the entire log up to that point is discarded. Snapshotting is used in Chubby and ZooKeeper, 
-and the remainder of this section describes snapshotting in Raft.
+then the entire log up to that point is discarded. 
+Snapshotting is used in Chubby and ZooKeeper, and the remainder of this section describes snapshotting in Raft.
+#####
+快照是最简单的压缩方法。
+在快照中，完整的当前系统状态以快照的形式写入稳定的存储中，然后在这个点位之前的整个日志会被丢弃。
+快照被用于Chubby和ZooKeeper中，本届的剩余部分将用于描述Raft中的快照。
 
 ![Figure12.png](Figure12.png)
 
@@ -1169,8 +1173,14 @@ These operate on a fraction of the data at once, so they spread the load of comp
 They first select a region of data that has accumulated many deleted and overwritten objects, 
 then they rewrite the live objects from that region more compactly and free the region.
 This requires significant additional mechanism and complexity compared to snapshotting,
-which simplifies the problem by always operating on the entire data set. While log cleaning would require modifications to Raft, 
-state machines can implement LSM trees using the same interface as snapshotting.
+which simplifies the problem by always operating on the entire data set. 
+While log cleaning would require modifications to Raft, state machines can implement LSM trees using the same interface as snapshotting.
+#####
+基于增量的压缩方法，例如日志清理和日志结构合并树(LSM tree)也是可行的。
+这些操作一次只操作少量的数据，因此它们能随着时间的退役均摊负载。
+它们首先选择一片数据区域，其已经积累了很多的被删除和覆盖的对象，然后它们以更加紧凑的方式重写来自这一片区域的存活对象(live objects)并释放这一区域。
+与快照压缩相比这显著的引入了额外的机制和复杂度，快照通过始终操作整个数据集合来简化这一问题。
+虽然日志清理需要对Raft进行修改，但状态机可以使用与快照相同的接口来实现LSM树。
 
 #####
 Figure 12 shows the basic idea of snapshotting in Raft.
@@ -1182,7 +1192,16 @@ the _last included index_ is the index of the last entry in the log that the sna
 These are preserved to support the AppendEntries consistency check for the first log entry following the snapshot,
 since that entry needs a previous log index and term. 
 To enable cluster membership changes (Section 6), the snapshot also includes the latest configuration in the log as of last included index.
-Once a server completes writing a snapshot, it may delete all log entries up through the last included index, as well as any prior snapshot
+Once a server completes writing a snapshot, it may delete all log entries up through the last included index, as well as any prior snapshot.
+#####
+图12展示了Raft中关于快照的基础思想。
+每一个服务器都独立的获得快照，只覆盖它已提交的日志条目。
+大部分的工作主要由状态机以快照形式写入它的当前状态组成。
+Raft还将少量的元数据包括在了快照中：
+_last included index_是快照代替的日志中的最后一个条目的索引值(状态机已应用的最后一个条目)，并且_last included term_是这个条目的任期值。
+保留这些条目是为了支持快照后面第一个条目的AppendEntries一致性检查，因为这个条目需要前一个日志的索引值和任期值。
+要启用集群变更(第6节)，快照还要包括含有*last included index*日志的最后配置。
+一旦一个服务器完成了一个快照的写入，它可能会删除包含*last included index*之前的所有日志条目，以及之前的任何快照。
 
 #####
 Although servers normally take snapshots independently, the leader must occasionally send snapshots to followers that lag behind.
@@ -1194,6 +1213,13 @@ The way to bring such a follower up-to-date is for the leader to send it a snaps
 ![Figure13.png](Figure13.png)
 
 #####
+尽管服务器通常独立的生成快照，但leader必须偶哦二的向落后的follower发送快照。
+当leader已经丢弃了需要发送给follower的下一个日志条目时就会发生这种情况。
+幸运的是，这种情况不太可能在正常操作中出现：一个跟上了leader的follower已经有了这个条目了。
+然而，一个异常慢的follower或者一个新加入集群的服务器(第6节)将没有这个条目。
+让这样的一个follower的日志和leader一样新的方法就是通过网络向它发送一个快照。
+
+#####
 The leader uses a new RPC called InstallSnapshot to send snapshots to followers that are too far behind; see Figure 13. 
 When a follower receives a snapshot with this RPC, it must decide what to do with its existing log entries.
 Usually the snapshot will contain new information not already in the recipient’s log. 
@@ -1201,6 +1227,12 @@ In this case, the follower discards its entire log; it is all superseded by the 
 and may possibly have uncommitted entries that conflict with the snapshot.
 If instead the follower receives a snapshot that describes a prefix of its log (due to retransmission or by mistake), 
 then log entries covered by the snapshot are deleted but entries following the snapshot are still valid and must be retained.
+#####
+leader使用一种新的被成为InstallSnapshot的RPC向落后太多的follower发送快照;如图13所示。
+当一个follower使用这个RPC接受到一个快照时，它必须决定如何处理它目前已存在的日志条目。
+通常，这个快照将包含目前还不在接受者日志中的新信息。
+这种情况下，follower将丢弃它全部的日志;其全部被快照所取代，并且被丢弃的日志中可能有着与快照相冲突的但还未提交的条目。
+相反，如果follower接受到的快照是它当前日志的前面一部分(由于重传或者出错了)，则被快照所覆盖的日志条目将会被删除但是快照后面的条目依然是有效的并且必须被保留。
 
 #####
 This snapshotting approach departs from Raft’s strong leader principle, since followers can take snapshots without the knowledge of the leader.
@@ -1208,6 +1240,11 @@ However, we think this departure is justified.
 While having a leader helps avoid conflicting decisions in reaching consensus, 
 consensus has already been reached when snapshotting, so no decisions conflict.
 Data still only flows from leaders to followers, just followers can now reorganize their data.
+#####
+这种快照的方式背离了Raft的强leader原则，因为follower可以在leader不知情的情况下生成快照。
+然而，我们认为这种背离是值得的。
+虽然由一个leader有助于避免在达成一致时产生决策冲突，但生成快照时是已经达成了一致的，所以不会有决策冲突。
+数据依然是仅由leader流向follower，但follower现在可以重新组织它们的数据。
 
 #####
 We considered an alternative leader-based approach in which only the leader would create a snapshot,
@@ -1219,6 +1256,13 @@ and it is typically much cheaper for a server to produce a snapshot from its loc
 Second, the leader’s implementation would be more complex. 
 For example, the leader would need to send snapshots to followers in parallel with replicating new log entries to them,
 so as not to block new client requests.
+#####
+我们考虑过另一种基于leader的方法，其只有leader可以创建快照，然后leader将发送快照给每一个follower。
+然而，这样做有两个缺点。
+首先，发送快照给每一个follower将浪费网络贷款并且减慢快照的处理。
+每一个follower已经有了生成它们自己快照所需要的信息，并且通常基于服务器本地状态来生成快照要比它们通过从网络发送和接收快照的开销要更低。
+其次，leader也会被实现的更加复杂。
+比如，leader将需要并行的发送快照给follower的同时还要令它们复制新的日志条目，以避免阻塞新的客户端请求。
 
 #####
 There are two more issues that impact snapshotting performance. 
@@ -1228,6 +1272,12 @@ it risks exhausting its storage capacity, and it increases the time required to 
 One simple strategy is to take a snapshot when the log reaches a fixed size in bytes.
 If this size is set to be significantly larger than the expected size of a snapshot, 
 then the disk bandwidth overhead for snapshotting will be small.
+#####
+还有两个问题会影响快照的性能。
+首先，服务器必须决定何时生成快照。
+如果服务器生成快照太频繁，则将浪费磁盘带宽和能源；如果生成快照太不频繁，则存在耗尽磁盘空间的风险，并且增加重启时回放日志所需的时间。
+一种简单的策略时当日志到达一个固定的字节数时生成一个快照。
+如果这个大小设置为一个明显大于快照预期大小的值，则用于快照生成的磁盘带宽开销将会很小。
 
 #####
 The second performance issue is that writing a snapshot can take a significant amount of time, 
@@ -1236,4 +1286,9 @@ The solution is to use copy-on-write techniques so that new updates can be accep
 For example, state machines built with functional data structures naturally support this. 
 Alternatively, the operating system’s copy-on-write support (e.g., fork on Linux) 
 can be used to create an in-memory snapshot of the entire state machine (our implementation uses this approach).
+#####
+第二个问题是写入一个快照会花费非常多的时间，并且我们不希望这会延迟正常操作。
+解决的方案是使用写时复制(copy-on-write)技术,以便可以在不影响快照的写入的同时接受新的更新。
+例如，使用函数式数据结构(functional data structures)构建的状态机能自然的支持这一点。
+或者，操作系统的写时复制支持(例如，linux中的fork)可以被用于创建整个状态机的内存快照(我们的实现使用了这个方法)。
 

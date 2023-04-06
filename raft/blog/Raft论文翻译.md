@@ -1259,7 +1259,7 @@ so as not to block new client requests.
 #####
 我们考虑过另一种基于leader的方法，其只有leader可以创建快照，然后leader将发送快照给每一个follower。
 然而，这样做有两个缺点。
-首先，发送快照给每一个follower将浪费网络贷款并且减慢快照的处理。
+首先，发送快照给每一个follower将浪费网络带宽并且减慢快照的处理。
 每一个follower已经有了生成它们自己快照所需要的信息，并且通常基于服务器本地状态来生成快照要比它们通过从网络发送和接收快照的开销要更低。
 其次，leader也会被实现的更加复杂。
 比如，leader将需要并行的发送快照给follower的同时还要令它们复制新的日志条目，以避免阻塞新的客户端请求。
@@ -1291,4 +1291,186 @@ can be used to create an in-memory snapshot of the entire state machine (our imp
 解决的方案是使用写时复制(copy-on-write)技术,以便可以在不影响快照的写入的同时接受新的更新。
 例如，使用函数式数据结构(functional data structures)构建的状态机能自然的支持这一点。
 或者，操作系统的写时复制支持(例如，linux中的fork)可以被用于创建整个状态机的内存快照(我们的实现使用了这个方法)。
+
+### 8 Client interaction(客户端交互)
+This section describes how clients interact with Raft, 
+including how clients find the cluster leader and how Raft supports linearizable semantics [10]. 
+These issues apply to all consensus-based systems, and Raft’s solutions are similar to other systems.
+#####
+本节描述了客户端如何与Raft交互，包括客户端如何找到集群leader以及Raft是如何支持线性化语义的。
+这些问题适用于所有的基于一致性的系统，同时Raft的解决方案也与其它系统是类似的。
+
+#####
+Clients of Raft send all of their requests to the leader.
+When a client first starts up, it connects to a randomly-chosen server. 
+If the client’s first choice is not the leader, 
+that server will reject the client’s request and supply information about the most recent leader it has heard from
+(AppendEntries requests include the network address of the leader). 
+If the leader crashes, client requests will time out; clients then try again with randomly-chosen servers.
+#####
+Raft的客户端将它们的所有请求发送给leader。
+当客户端第一次启动时，它会随机选择一台服务器并进行连接。
+如果客户端第一次选择的不是leader，则服务器将会拒绝客户端的请求并且提供关于它听到的最近的leader的信息(AppendEntries的请求中包括了leader的网络地址)。
+如果leader崩溃了，客户端的请求将会超时;客户端则会再一次随机选择一台服务器。
+
+#####
+Our goal for Raft is to implement linearizable semantics (each operation appears to execute instantaneously,
+exactly once, at some point between its invocation and its response). 
+However, as described so far Raft can execute a command multiple times: 
+for example, if the leader crashes after committing the log entry but before responding to the client, 
+the client will retry the command with a new leader, causing it to be executed a second time. 
+The solution is for clients to assign unique serial numbers to every command. 
+Then, the state machine tracks the latest serial number processed for each client, along with the associated response.
+If it receives a command whose serial number has already been executed, it responds immediately without re-executing the request.
+#####
+我们对于Raft的目标是实现可线性化的语义(每一个操作会立即执行，执行且只执行一次，执行的时机位于请求和响应之间)。
+然而，如上所述Raft可以执行执行一条指令多次：例如，如果leader在提交日志条目后但响应客户端之前崩溃了，客户端将会与新的leader重试这条指令，使得该指令被执行了两次。
+解决方案是让客户端为每一个指令分配一个唯一的序列号。
+然后，状态机追踪为每一个客户端处理的最后的序列号，以及相关的响应。
+如果它接受到了一个指令其序列号是已经被执行了的，它将立即返回而不会重新执行该请求。
+
+#####
+Read-only operations can be handled without writing anything into the log. 
+However, with no additional measures, this would run the risk of returning stale data, 
+since the leader responding to the request might have been superseded by a newer leader of which it is unaware. 
+Linearizable reads must not return stale data, and Raft needs two extra precautions to guarantee this without using the log.
+First, a leader must have the latest information on which entries are committed. 
+The Leader Completeness Property guarantees that a leader has all committed entries,
+but at the start of its term, it may not know which those are. 
+To find out, it needs to commit an entry from its term. 
+Raft handles this by having each leader commit a blank _no-op_ entry into the log at the start of its term. 
+Second, a leader must check whether it has been deposed before processing a read-only request 
+(its information may be stale if a more recent leader has been elected).
+Raft handles this by having the leader exchange heartbeat messages with a majority of the cluster before responding to read-only requests.
+Alternatively, the leader could rely on the heartbeat mechanism to provide a form of lease [9], 
+but this would rely on timing for safety (it assumes bounded clock skew).
+#####
+只读操作可以直接被处理而不需要向日志写入任何东西。
+然而，如果没有额外的机制，将会有返回过时数据的风险，因为响应请求的leader可能已经被一个新的leader取代了但它自己却没感知到。
+线性化的读必须不返回过时数据，并且Raft需要两个额外的预防措施在不使用日志的前提下保证这一点。
+首先，leader必须掌握已提交日志条目的最新信息。
+leader完整性属性保证了leader有着所有已提交的条目，但在它任期的开始时，它不知道哪些是已提交的条目。
+为了找到哪些是已提交的条目，它需要提交一个来自它自己任期的条目。
+Raft通过在leader开始其任期时，让每一个leader提交一个空白的_no-op_条目来处理这一问题。
+其次，leader在处理只读请求时必须检查它是否已经被罢黜退位了(如果最新的leader已经被选出，则它的信息可能已经过时了)。
+Raft通过让leader在响应只读请求之前与集群中的大多数交换心跳信息来解决这一问题。
+或者，leader可以依赖心跳机制来提供一种租约的形式，但这将会依赖于时钟的安全性(假设时间误差是有限的)。
+
+### 9 Implementation and evaluation(实现与评估)
+We have implemented Raft as part of a replicated state machine that stores configuration information for RAMCloud [33] 
+and assists in failover of the RAMCloud coordinator. 
+The Raft implementation contains roughly 2000 lines of C++ code, not including tests, comments, or blank lines.
+The source code is freely available [23]. 
+There are also about 25 independent third-party open source implementations [34] of Raft in various stages of development, 
+based on drafts of this paper. 
+Also, various companies are deploying Raft-based systems [34].
+
+#####
+The remainder of this section evaluates Raft using three criteria: understandability, correctness, and performance.
+
+### 9.1 Understandability
+To measure Raft’s understandability relative to Paxos, 
+we conducted an experimental study using upper-level undergraduate and graduate students in 
+an Advanced Operating Systems course at Stanford University and a Distributed Computing course at U.C. Berkeley. 
+We recorded a video lecture of Raft and another of Paxos, and created corresponding quizzes. 
+The Raft lecture covered the content of this paper except for log compaction; 
+the Paxos lecture covered enough material to create an equivalent replicated state machine, including single-decree Paxos,
+multi-decree Paxos, reconfiguration, and a few optimizations needed in practice (such as leader election).
+The quizzes tested basic understanding of the algorithms and also required students to reason about corner cases. 
+Each student watched one video, took the corresponding quiz, watched the second video, and took the second quiz.
+About half of the participants did the Paxos portion first 
+and the other half did the Raft portion first in order to account for both individual differences in performance
+and experience gained from the first portion of the study.
+We compared participants’ scores on each quiz to determine whether participants showed a better understanding of Raft.
+
+![Figure14.png](Figure14.png)
+
+#####
+We tried to make the comparison between Paxos and Raft as fair as possible. 
+The experiment favored Paxos in two ways: 15 of the 43 participants reported having some prior experience with Paxos, 
+and the Paxos video is 14% longer than the Raft video. 
+As summarized in Table 1, we have taken steps to mitigate potential sources of bias.
+All of our materials are available for review [28, 31].
+
+#####
+On average, participants scored 4.9 points higher on the Raft quiz than on the Paxos quiz 
+(out of a possible 60 points, the mean Raft score was 25.7 and the mean Paxos score was 20.8); 
+Figure 14 shows their individual scores. 
+A paired t-test states that, with 95% confidence,
+the true distribution of Raft scores has a mean at least 2.5 points larger than the true distribution of Paxos scores.
+
+#####
+We also created a linear regression model that predicts a new student’s quiz scores based on three factors: 
+which quiz they took, their degree of prior Paxos experience, and the order in which they learned the algorithms.
+The model predicts that the choice of quiz produces a 12.5-point difference in favor of Raft.
+This is significantly higher than the observed difference of 4.9 points, because many of the actual students had prior Paxos experience, 
+which helped Paxos considerably, whereas it helped Raft slightly less.
+Curiously, the model also predicts scores 6.3 points lower on Raft for people that have already taken the Paxos quiz;
+although we don’t know why, this does appear to be statistically significant.
+
+![Figure15.png](Figure15.png)
+
+#####
+We also surveyed participants after their quizzes to see which algorithm they felt would be easier to implement or explain;
+these results are shown in Figure 15. 
+An overwhelming majority of participants reported Raft would be easier to implement and explain (33 of 41 for each question). 
+However, these self-reported feelings may be less reliable than participants’ quiz scores,
+and participants may have been biased by knowledge of our hypothesis that Raft is easier to understand.
+
+#####
+A detailed discussion of the Raft user study is available at [31].
+
+![Table1.png](Table1.png)
+
+### 9.2 Correctness
+We have developed a formal specification and a proof of safety for the consensus mechanism described in Section 5. 
+The formal specification [31] makes the information summarized in Figure 2 completely precise using the TLA+ specification language [17].
+It is about 400 lines long and serves as the subject of the proof. 
+It is also useful on its own for anyone implementing Raft.
+We have mechanically proven the Log Completeness Property using the TLA proof system [7]. 
+However, this proof relies on invariants that have not been mechanically checked
+(for example, we have not proven the type safety of the specification). 
+Furthermore, we have written an informal proof [31] of the State Machine Safety property which is complete
+(it relies on the specification alone) and rela tively precise (it is about 3500 words long).
+
+![Figure16.png](Figure16.png)
+
+### 9.3 Performance
+Raft’s performance is similar to other consensus algorithms such as Paxos.
+The most important case for performance is when an established leader is replicating new log entries. 
+Raft achieves this using the minimal number of messages (a single round-trip from the leader to half the cluster). 
+It is also possible to further improve Raft’s performance.
+For example, it easily supports batching and pipelining requests for higher throughput and lower latency. 
+Various optimizations have been proposed in the literature for other algorithms; many of these could be applied to Raft,
+but we leave this to future work.
+
+#####
+We used our Raft implementation to measure the performance of Raft’s leader election algorithm and answer two questions.
+First, does the election process converge quickly? 
+Second, what is the minimum downtime that can be achieved after leader crashes?
+
+#####
+To measure leader election, we repeatedly crashed the leader of a cluster of five servers
+and timed how long it took to detect the crash and elect a new leader (see Figure 16). 
+To generate a worst-case scenario, the servers in each trial had different log lengths, so some candidates were not eligible to become leader.
+Furthermore, to encourage split votes, our test script triggered
+a synchronized broadcast of heartbeat RPCs from the leader before terminating its process 
+(this approximates the behavior of the leader replicating a new log entry prior to crashing).
+The leader was crashed uniformly randomly within its heartbeat interval, which was half of the minimum election timeout for all tests.
+Thus, the smallest possible downtime was about half of the minimum election timeout.
+
+#####
+The top graph in Figure 16 shows that a small amount of randomization in the election timeout is enough to avoid split votes in elections. 
+In the absence of randomness, leader election consistently took longer than 10 seconds in our tests due to many split votes.
+Adding just 5ms of randomness helps significantly, resulting in a median downtime of 287ms.
+Using more randomness improves worst-case behavior: with 50ms of randomness the worstcase completion time (over 1000 trials) was 513ms.
+
+#####
+The bottom graph in Figure 16 shows that downtime can be reduced by reducing the election timeout. 
+With an election timeout of 12–24ms, it takes only 35ms on average to elect a leader (the longest trial took 152ms).
+However, lowering the timeouts beyond this point violates Raft’s timing requirement: 
+leaders have difficulty broadcasting heartbeats before other servers start new elections. 
+This can cause unnecessary leader changes and lower overall system availability.
+We recommend using a conservative election timeout such as 150–300ms; 
+such timeouts are unlikely to cause unnecessary leader changes and will still provide good availability.
 

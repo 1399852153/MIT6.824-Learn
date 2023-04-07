@@ -1364,9 +1364,17 @@ The source code is freely available [23].
 There are also about 25 independent third-party open source implementations [34] of Raft in various stages of development, 
 based on drafts of this paper. 
 Also, various companies are deploying Raft-based systems [34].
+#####
+我们已经将Raft实现为复制状态机的一部分，其存储RAMCloud的配置信息并且协助RAMCloud协调者进行故障恢复。
+Raft的实现包含了大概2000行的C++代码，不包括测试，备注或者空行。
+源代码是免费提供的。
+基于本论文的草稿，有大约25个独立的、处于不同开发阶段的Raft三方开源实现。
+此外，很多公司也部署了基于Raft的系统。
 
 #####
 The remainder of this section evaluates Raft using three criteria: understandability, correctness, and performance.
+#####
+本节的剩余部分用于在三个方面评估Raft: 可理解性，正确性和性能。
 
 ### 9.1 Understandability
 To measure Raft’s understandability relative to Paxos, 
@@ -1386,11 +1394,26 @@ We compared participants’ scores on each quiz to determine whether participant
 ![Figure14.png](Figure14.png)
 
 #####
+为了测量Raft相对于Paxos的可理解性，我们对来自斯坦福大学的高级操作系统课程和加州大学伯克利分校的分布式系统课程的高水平本科生和研究生组织了一场学习实验。
+我们录制了Raft和Paxos的视频讲座，并且制作了相对应的测验。
+Raft的讲座覆盖了本文除日志压缩以外的内容，Paxos的讲座覆盖了相当于创建一个等效的复制状态机的足够多的材料，包括single-decree Paxos，multi-decree Paxos，
+刷新配置，以及实践中所需要的一小部分优化(例如leader选举)。
+测验测试了学生对算法的基础理解同时也需要学生能推理出极端的case。
+每个学生观看第一个视频，然后做相应的测验，再看第二个视频，然后再做第二个视频对应的测验。
+为解释本实验第一次学习时获得的经验和表现上的差异，大约一般的实验者先做Paxos那部分的而另一半实验者则先做Raft的那部分。
+我们比较了实验者在每一次测验中的分数来确定实现者是否展现出了对Raft有着更好的裂解。
+
+#####
 We tried to make the comparison between Paxos and Raft as fair as possible. 
 The experiment favored Paxos in two ways: 15 of the 43 participants reported having some prior experience with Paxos, 
 and the Paxos video is 14% longer than the Raft video. 
 As summarized in Table 1, we have taken steps to mitigate potential sources of bias.
 All of our materials are available for review [28, 31].
+#####
+我们尝试着使得Paxos和Raft之间的比较尽可能的公平。
+该实验在两方面有利于Paxos：43名实验者中的15名报告说曾经有着一些关于Paxos的经验，同时Paxos的视频比Raft的视频要长14%。
+如表1所示，我们已经采取措施来减少潜在的来源偏差。
+我们所有的材料都是可以审查的。
 
 #####
 On average, participants scored 4.9 points higher on the Raft quiz than on the Paxos quiz 
@@ -1398,6 +1421,10 @@ On average, participants scored 4.9 points higher on the Raft quiz than on the P
 Figure 14 shows their individual scores. 
 A paired t-test states that, with 95% confidence,
 the true distribution of Raft scores has a mean at least 2.5 points larger than the true distribution of Paxos scores.
+#####
+平均而言，参与者在Raft测验中的得分要比Paxos的测验中的得分要高4.9分(换算成60分制，意味着Raft的测验分数为25.7同时Paxos的测验分数为20.8)
+图14展示了它们各自的分数。
+配队t-test表名，有95%的置信度下，Raft的真实分数分布比Paxos的真实分数分布至少要高2.5分。
 
 #####
 We also created a linear regression model that predicts a new student’s quiz scores based on three factors: 
@@ -1409,6 +1436,11 @@ Curiously, the model also predicts scores 6.3 points lower on Raft for people th
 although we don’t know why, this does appear to be statistically significant.
 
 ![Figure15.png](Figure15.png)
+#####
+我们还创建了一个线性回归模型，其用于预测新生基于三个要素的测验成绩：分别是它们参加的测验，它们之前关于Paxos的经验，以及它们学习算法的顺序。
+这个模型预测选择的测验中Raft要比Paxos高12.5分。
+这明显高于观察到的4.9分的差异，因为实际上很多学生之前有过Paxos的经验，这有助于对Paxos的理解，而对于Raft的帮助则少很多。
+奇怪的是，模型还预测已经参加过Paxos测验的人在Raft的实验上将会低6.3分；即使我们不知道为什么，但这似乎具有统计学的意义。
 
 #####
 We also surveyed participants after their quizzes to see which algorithm they felt would be easier to implement or explain;
@@ -1416,13 +1448,19 @@ these results are shown in Figure 15.
 An overwhelming majority of participants reported Raft would be easier to implement and explain (33 of 41 for each question). 
 However, these self-reported feelings may be less reliable than participants’ quiz scores,
 and participants may have been biased by knowledge of our hypothesis that Raft is easier to understand.
+#####
+我们还在参与者测验后对其进行了调查，询问它们感觉哪种算法更加容易实现或解释；结果如图15所示。
+绝大多数参与者表示Raft要更加容易实现和解释(41个被提问者中的33个)
+然而，这些自我报告的感受可能不如参与者的测验分数更加可靠，并且参与者可能由于我们假设了Raft更加容易理解而产生偏见。
 
 #####
 A detailed discussion of the Raft user study is available at [31].
+#####
+有关Raft用户研究的详细讨论，请参见[31]。
 
 ![Table1.png](Table1.png)
 
-### 9.2 Correctness
+### 9.2 Correctness(正确性)
 We have developed a formal specification and a proof of safety for the consensus mechanism described in Section 5. 
 The formal specification [31] makes the information summarized in Figure 2 completely precise using the TLA+ specification language [17].
 It is about 400 lines long and serves as the subject of the proof. 
@@ -1435,7 +1473,16 @@ Furthermore, we have written an informal proof [31] of the State Machine Safety 
 
 ![Figure16.png](Figure16.png)
 
-### 9.3 Performance
+#####
+我们已经为第5节所描述的一致性机制提供了形式化规约和安全性证明。
+形式化规约使用TLA+规约语言精确的使用了如图2摘要中的信息。
+大约由400行长并且可以作为证明的主体来使用。
+对于任何一个想实现Raft的人来说也是有用的。
+我们已经使用TLA证明系统机械地证明了Log Completeness特性。
+然而，这一证明依赖于尚未被机械地检查地不变量(例如，我们还没有证明规约的类型安全性)。
+此外，我们也编写了关于状态机安全特性(State Machine Safety property)的非正式证明，该证明是完整的(仅依赖于规约)并且是相对精确的(大约长3500字)。
+
+### 9.3 Performance(性能)
 Raft’s performance is similar to other consensus algorithms such as Paxos.
 The most important case for performance is when an established leader is replicating new log entries. 
 Raft achieves this using the minimal number of messages (a single round-trip from the leader to half the cluster). 

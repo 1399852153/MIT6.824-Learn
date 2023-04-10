@@ -1490,11 +1490,22 @@ It is also possible to further improve Raft’s performance.
 For example, it easily supports batching and pipelining requests for higher throughput and lower latency. 
 Various optimizations have been proposed in the literature for other algorithms; many of these could be applied to Raft,
 but we leave this to future work.
+#####
+Raft的性能与Paxos等其它一致性算法的性能相差无几。
+对于性能而言最重要的方面是一个已被选出的leader复制新的日志条目。
+Raft通过使用最少数量的消息来实现这一点(从leader到集群中半数机器的单轮往返)。
+这也可能进一步的提升Raft的性能。
+例如，它可以轻松的支持批处理和流水线(pipelining)请求来获得更高的吞吐量和更低的延迟。
+在资料中已经针对其它算法提出了一系列的优化;其中有很多优化也能应用在Raft中，但我们将此留给未来的工作。
 
 #####
 We used our Raft implementation to measure the performance of Raft’s leader election algorithm and answer two questions.
 First, does the election process converge quickly? 
 Second, what is the minimum downtime that can be achieved after leader crashes?
+#####
+我们使用我们自己的Raft实现来衡量Raft的leader选举算法性能，并且回答两个问题。
+第一，选举过程是否迅速的收敛？
+第二，在leader崩溃后可以实现的停机宕机时间是多少？
 
 #####
 To measure leader election, we repeatedly crashed the leader of a cluster of five servers
@@ -1505,12 +1516,21 @@ a synchronized broadcast of heartbeat RPCs from the leader before terminating it
 (this approximates the behavior of the leader replicating a new log entry prior to crashing).
 The leader was crashed uniformly randomly within its heartbeat interval, which was half of the minimum election timeout for all tests.
 Thus, the smallest possible downtime was about half of the minimum election timeout.
+#####
+为了测量leader选举的性能，我们反复的令一个五节点集群中的leader崩溃，并且测量集群多久能检测到崩溃并选举出一个新的leader(见图16)。
+为了生成最坏的情况，在每次实验中服务器都有着不同的日志长度，因此一些candidate将没有资格成为leader。
+此外，为了促进分裂投票的产生，我们的测试脚本在终止leader进程前触发了一次leader的同步RPC心跳广播(这类似于leader在崩溃前复制新的日志条目的行为)。
 
 #####
 The top graph in Figure 16 shows that a small amount of randomization in the election timeout is enough to avoid split votes in elections. 
 In the absence of randomness, leader election consistently took longer than 10 seconds in our tests due to many split votes.
 Adding just 5ms of randomness helps significantly, resulting in a median downtime of 287ms.
 Using more randomness improves worst-case behavior: with 50ms of randomness the worstcase completion time (over 1000 trials) was 513ms.
+#####
+图16中的上图显示了，只要少量的随机化选举超时时间就足够避免选举时的投票分裂。
+在缺乏随机性的情况下，由于许多分裂的投票，在我们的测试中leader选举一直持续了超过10秒钟。
+只要增加5ms的随机性就能有显著的帮助，平均的停机时间中位数为287ms。
+使用更多的随机性可以盖申最坏情况下的行为：有着50ms的随机性时最坏情况下(超过1000次实验)的选举完成时间为513ms。
 
 #####
 The bottom graph in Figure 16 shows that downtime can be reduced by reducing the election timeout. 
@@ -1520,4 +1540,119 @@ leaders have difficulty broadcasting heartbeats before other servers start new e
 This can cause unnecessary leader changes and lower overall system availability.
 We recommend using a conservative election timeout such as 150–300ms; 
 such timeouts are unlikely to cause unnecessary leader changes and will still provide good availability.
+#####
+图16中的下图显示，可以通过减少选举超时时间来减少停机时间。
+由于选举超时时间为12-24ms，选举出一个leader的平均耗时只需要35ms(最长的一次实验花费了152ms)。
+然而，超时时间低于这一位点以下会违反Raft的时间需求：leader很难在其它leader发起新一轮选举前进行心跳广播。
+这可能会导致不必要的leader变更以及更低的整体系统可用性。
+我们推荐使用一个保守的选举超时时间比如150-300ms；这一超时时间不太可能造成不必要的leader变更并且将仍然提供良好的可用性。
 
+### 10 Related work
+There have been numerous publications related to consensus algorithms, many of which fall into one of the following categories:
+* Lamport’s original description of Paxos [15], and attempts to explain it more clearly [16, 20, 21].
+* Elaborations of Paxos, which fill in missing details and modify the algorithm to provide a better foundation for implementation [26, 39, 13].
+* Systems that implement consensus algorithms, such as Chubby [2, 4], ZooKeeper [11, 12], and Spanner [6]. 
+  The algorithms for Chubby and Spanner have not been published in detail, though both claim to be based on Paxos.
+  ZooKeeper’s algorithm has been published in more detail, but it is quite different from Paxos.
+* Performance optimizations that can be applied to Paxos [18, 19, 3, 25, 1, 27].
+* Oki and Liskov’s View-stamped Replication (VR), an alternative approach to consensus developed around the same time as Paxos. 
+  The original description [29] was intertwined with a protocol for distributed transactions, 
+  but the core consensus protocol has been separated in a recent update [22].
+  VR uses a leader-based approach with many similarities to Raft.
+#####
+已经有许多与一致性算法有关的出版物了，其中很多都属于以下类目中的一个：
+* Lamport对于Paxos的原始描述，并且试图更加清晰的进行解释。
+* 对Paxos的细化，其填充了确实的细节并且修改了算法以为实现Paxos提供了一个更好的基础。
+* 实现了共识算法的系统，例如Chubby，ZooKeeper和Spanner。
+  Chubby和Spanner的算法并没有公布细节，即使它们都声称其基于Paxos。
+  ZooKeeper的算法公布了更多的细节，但其与Paxos截然不同。
+* 可用于Paxos的性能优化。
+* Oki和Liskov的Viewstamped Replication (VR)算法，另一种共识算法其被开发的时间点与Paxos相同。
+  最初的描述与分布式事务的协议混在了一起，但最近的更新中其核心的共识协议已经被分离出来了。
+  VR采用了一种基于leader的方法,其与Raft存在很多相似之处。
+
+#####
+The greatest difference between Raft and Paxos is Raft’s strong leadership: 
+Raft uses leader election as an essential part of the consensus protocol, and it concentrates as much functionality as possible in the leader.
+This approach results in a simpler algorithm that is easier to understand. 
+For example, in Paxos, leader election is orthogonal to the basic consensus protocol:
+it serves only as a performance optimization and is not required for achieving consensus. 
+However, this results in additional mechanism: 
+Paxos includes both a two-phase protocol for basic consensus and a separate mechanism for leader election.
+In contrast, Raft incorporates leader election directly into the consensus algorithm and uses it as the first of the two phases of consensus.
+This results in less mechanism than in Paxos.
+#####
+Raft和Paxos最大的区别在于Raft的强领导性：
+Raft将leader选举作为共识协议中必要的组成部分，并尽可能的将很多功能集中在leader身上。
+这一策略使得Raft成为了一个更简单的算法，其更容易被理解。
+例如，在Paxos中，leader选举基本上与基础的一致性协议无关：
+其仅仅用于性能优化并且不是实现共识所必须的。
+然而，这产生了额外的机制：
+Paxos包括了一个用于基础一致性的两阶段协议以及一个单独的用于leader选举的机制。
+相比之下，Raft将leader选举直接纳入共识算法中并且将leader选举作为共识的两阶段中的第一个阶段。
+这使得Raft比起Paxos有着更少的机制。
+
+#####
+Like Raft, VR and ZooKeeper are leader-based and therefore share many of Raft’s advantages over Paxos.
+However, Raft has less mechanism that VR or ZooKeeper because it minimizes the functionality in non-leaders.
+For example, log entries in Raft flow in only one direction: outward from the leader in AppendEntries RPCs.
+In VR log entries flow in both directions (leaders can receive log entries during the election process); 
+this results in additional mechanism and complexity. 
+The published description of ZooKeeper also transfers log entries both to and from the leader,
+but the implementation is apparently more like Raft [35].
+#####
+与Raft一样，VR和ZooKeeper都是基于leader的并且也共享着很多Raft相对于Paxos的优点。
+然而，Raft比起VR或者Zookeeper有着更少的机制因为它最小化了非leader(non-leaders)的功能。
+例如，Raft中的日志条目流向只有一个方向：从leader向外流出的AppendEntries RPC。
+在VR中日志条目是双向流动的(leader也可以在选举期间接受日志条目);这引入了额外的机制和复杂度。
+ZooKeeper的已公布的描述中也允许日志条目在leader中双向的传输，但其实现明显与Raft更加相似。
+
+#####
+Raft has fewer message types than any other algorithm for consensus-based log replication that we are aware of.
+For example, we counted the message types VR and ZooKeeper use for basic consensus and membership
+changes (excluding log compaction and client interaction, as these are nearly independent of the algorithms). 
+VR and ZooKeeper each define 10 different message types, while Raft has only 4 message types (two RPC requests and their responses). 
+Raft’s messages are a bit more dense than the other algorithms’, but they are simpler collectively. 
+In addition, VR and ZooKeeper are described in terms of transmitting entire logs during leader changes;
+additional message types will be required to optimize these mechanisms so that they are practical.
+#####
+Raft的消息类型比任何其它已知的、基于日志复制的共识算法都要少。
+
+#####
+Raft’s strong leadership approach simplifies the algorithm, but it precludes some performance optimizations.
+For example, Egalitarian Paxos (EPaxos) can achieve higher performance under some conditions with a leaderless approach [27]. 
+EPaxos exploits commutativity in state machine commands. 
+Any server can commit a command with just one round of communication as long as other commands that are proposed concurrently commute with it.
+However, if commands that are proposed concurrently do not commute with each other, EPaxos requires an additional round of communication.
+Because any server may commit commands, EPaxos balances load well between servers and is able to achieve lower latency than Raft in WAN settings.
+However, it adds significant complexity to Paxos.
+
+#####
+Several different approaches for cluster membership changes have been proposed or implemented in other work,
+including Lamport’s original proposal [15], VR [22], and SMART [24]. 
+We chose the joint consensus approach for Raft because it leverages the rest of the consensus protocol, 
+so that very little additional mechanism is required for membership changes. 
+Lamport’s α-based approach was not an option for Raft because it assumes consensus can be reached without a leader. 
+In comparison to VR and SMART, Raft’s reconfiguration algorithm has the advantage 
+that membership changes can occur without limiting the processing of normal requests; 
+in contrast, VR stops all normal processing during configuration changes, 
+and SMART imposes an α-like limit on the number of outstanding requests.
+Raft’s approach also adds less mechanism than either VR or SMART.
+
+### 11 Conclusion
+Algorithms are often designed with correctness, efficiency, and/or conciseness as the primary goals. 
+Although these are all worthy goals, we believe that understandability is just as important.
+None of the other goals can be achieved until developers render the algorithm into a practical implementation,
+which will inevitably deviate from and expand upon the published form. 
+Unless developers have a deep understanding of the algorithm and can create intuitions about it, 
+it will be difficult for them to retain its desirable properties in their implementation.
+
+#####
+In this paper we addressed the issue of distributed consensus, where a widely accepted but impenetrable algorithm,
+Paxos, has challenged students and developers for many years. 
+We developed a new algorithm, Raft, which we have shown to be more understandable than Paxos.
+We also believe that Raft provides a better foundation for system building. 
+Using understandability as the primary design goal changed the way we approached the design of Raft; 
+as the design progressed we found ourselves reusing a few techniques repeatedly, 
+such as decomposing the problem and simplifying the state space. 
+These techniques not only improved the understandability of Raft but also made it easier to convince ourselves of its correctness.

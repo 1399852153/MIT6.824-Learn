@@ -1617,6 +1617,10 @@ In addition, VR and ZooKeeper are described in terms of transmitting entire logs
 additional message types will be required to optimize these mechanisms so that they are practical.
 #####
 Raft的消息类型比任何其它已知的、基于日志复制的共识算法都要少。
+例如，我们统计了VR和ZooKeeper用于基础共识和成员变更的消息类型数(不包括日志压缩和客户端交互，因为这些与算法几乎是独立的)。
+VR和ZooKeeper都定义了10种不同的消息类型，而Raft只有4种(2种RPC的请求以及它们的响应)。
+Raft的消息比其它算法的要稍微紧密一些，但总体上更加简单。
+此外，VR和ZooKeeper所描述的在任期转换时需要传输完整的日志;所以在实践中需要额外的消息类型来优化这些机制。
 
 #####
 Raft’s strong leadership approach simplifies the algorithm, but it precludes some performance optimizations.
@@ -1626,6 +1630,14 @@ Any server can commit a command with just one round of communication as long as 
 However, if commands that are proposed concurrently do not commute with each other, EPaxos requires an additional round of communication.
 Because any server may commit commands, EPaxos balances load well between servers and is able to achieve lower latency than Raft in WAN settings.
 However, it adds significant complexity to Paxos.
+#####
+Raft的强领导力方法简化了算法，但是也排除了一些性能优化。
+例如，Egalitarian Paxos(EPaxos)可以通过无leader的方法在某些条件下可以获得更高的性能。
+EPaxos利用了状态机指令的交换性。
+只要同时提出的其它指令能够与之交换，任何服务器都可以仅在一轮通信中提交指令。
+然而，如果同时发出的指令不能相互交换，则EPaxos需要额外的一轮通信。
+因为任何服务器都能够提交指令，EPaxos能够更好的平衡服务器间的负载并且能够达到比Raft的WAN设置更低的延迟。
+然而，这显著的增加了Paxos的复杂性。
 
 #####
 Several different approaches for cluster membership changes have been proposed or implemented in other work,
@@ -1638,6 +1650,13 @@ that membership changes can occur without limiting the processing of normal requ
 in contrast, VR stops all normal processing during configuration changes, 
 and SMART imposes an α-like limit on the number of outstanding requests.
 Raft’s approach also adds less mechanism than either VR or SMART.
+#####
+在其它工作中，几种不同的用于集群成员变更的方法已经被提出或被实现，包括Lamport的原始提案，VR以及SMART。
+我们为Raft选择了联合一致的方法，因为它利用了一致性协议的其余部分，因此成员变更只需要增加非常少的额外机制。
+Lamport的α-based方法没有被Raft选中，因为它假设可以在没有leader的情况下达成共识。
+与VR和SMART相比，Raft的刷新配置的算法有一个优点是可以再不限制正常请求的情况下进行成员变更；
+相比之下，VR在配置变更期间停止所有正常的请求处理并且SMART对未完成的请求施加了α-like限制。
+Raft的方法相比VR或者SMART也增加了最少的机制。
 
 ### 11 Conclusion
 Algorithms are often designed with correctness, efficiency, and/or conciseness as the primary goals. 
@@ -1646,6 +1665,11 @@ None of the other goals can be achieved until developers render the algorithm in
 which will inevitably deviate from and expand upon the published form. 
 Unless developers have a deep understanding of the algorithm and can create intuitions about it, 
 it will be difficult for them to retain its desirable properties in their implementation.
+#####
+算法的设计通常以正确性，效率和/或间接性为主要目标。
+尽管这些都是有价值的目标，我们认为可理解性同样重要。
+在开发人员将算法转化为一个可行的实现前无法达成任何其它的目标，而实际实现将不可避免的偏离和拓展已发布的形式。
+除非开发人员对算法有着很深的理解并且对其产生直觉，否则其将很难在他们的实现中保留理想的特性。
 
 #####
 In this paper we addressed the issue of distributed consensus, where a widely accepted but impenetrable algorithm,
@@ -1656,3 +1680,29 @@ Using understandability as the primary design goal changed the way we approached
 as the design progressed we found ourselves reusing a few techniques repeatedly, 
 such as decomposing the problem and simplifying the state space. 
 These techniques not only improved the understandability of Raft but also made it easier to convince ourselves of its correctness.
+#####
+在本文总我们讨论了分布式一致性的问题，一种被广泛接受但难于实现的算法Paxos，在多年来一直在挑战着学生和开发者。
+我们开发了一种新的算法，Raft，我们已经展示了其比Paxos更加容易理解。
+我们也认为Raft为构建系统提供了一个更好的基础。
+以可理解性作为主要实现目标改变了我们设计Raft时的方法；随着设计的近战我们发现我们重复的复用了少量技术，例如分解问题和简化状态空间。
+这些技术不仅提高了Raft的可理解性也使得我们更容易相信它的正确性。
+
+### 12 Acknowledgments(致谢)
+The user study would not have been possible without the support of Ali Ghodsi, David Mazieres, 
+and the students of CS 294-91 at Berkeley and CS 240 at Stanford. 
+Scott Klemmer helped us design the user study, and Nelson Ray advised us on statistical analysis.
+The Paxos slides for the user study borrowed heavily from a slide deck originally created by Lorenzo Alvisi. 
+Special thanks go to David Mazi`eres and Ezra Hoch for finding subtle bugs in Raft. 
+Many people provided helpful feedback on the paper and user study materials, 
+including Ed Bugnion, Michael Chan, Hugues Evrard,Daniel Giffin, Arjun Gopalan, Jon Howell, Vimalkumar Jeyakumar, Ankita Kejriwal, 
+Aleksandar Kracun, Amit Levy, Joel Martin, Satoshi Matsushita, Oleg Pesok, David Ramos, 
+Robbert van Renesse, Mendel Rosenblum, Nicolas Schiper, Deian Stefan, Andrew Stone, Ryan Stutsman,
+David Terei, Stephen Yang, Matei Zaharia, 24 anonymous conference reviewers (with duplicates), and especially our shepherd Eddie Kohler.
+Werner Vogels tweeted a link to an earlier draft, which gave Raft significant exposure.
+This work was supported by the Gigascale Systems Research Center and the Multiscale Systems Center,
+two of six research centers funded under the Focus Center Research Program, a Semiconductor Research Corporation program, 
+by STAR net, a Semiconductor Research Corporation program sponsored by MARCO and DARPA,
+by the National Science Foundation under Grant No. 0963859, and by grants from Facebook, Google, Mellanox, NEC, NetApp, SAP,
+and Samsung. Diego Ongaro is supported by The Junglee Corporation Stanford Graduate Fellowship.
+#####
+翻译：略

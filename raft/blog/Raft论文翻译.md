@@ -110,7 +110,7 @@ presents the Raft consensus algorithm (Sections 5–8),
 evaluates Raft (Section 9), and discusses related work (Section 10).
 #####
 本文的剩余部分介绍了复制状态机问题(第2节)，
-天伦了Paxos的优缺点(第3节)，
+讨论了Paxos的优缺点(第3节)，
 描述了我们使算法易于理解的一般性方法(第4节)，
 提出了Raft一致性算法(第5-8节)，
 评估了Raft(第9节)，并且讨论了相关的工作(第10节)。
@@ -134,6 +134,14 @@ Examples of replicated state machines include Chubby and ZooKeeper.
 复制状态机的例子包括Chubby和ZooKeeper。
 
 ![Figure1.png](Figure1.png)
+#####
+Figure 1: Replicated state machine architecture. 
+The consensus algorithm manages a replicated log containing state machine commands from clients. 
+The state machines process identical sequences of commands from the logs, so they produce the same outputs.
+#####
+图1：复制状态机的架构。
+一致性算法管理包含了来自客户端的状态机指令的复制日志。
+状态机以完全相同的顺序处理来自日志的指令，因此它们会产生相同的输出。
 
 #####
 Replicated state machines are typically implemented using a replicated log, as shown in Figure 1. 
@@ -400,7 +408,24 @@ After presenting the consensus algorithm, this section discusses the issue of av
 在展示了一致性算法后，本章节还将讨论可用性问题以及时序在系统中起到的作用。
 
 ![Figure2.png](Figure2.png)
+#####
+A condensed summary of the Raft consensus algorithm (excluding membership changes and log compaction).
+The server behavior in the upper-left box is described as a set of rules that trigger independently and repeatedly. 
+Section numbers such as §5.2 indicate where particular features are discussed. 
+A formal specification [31] describes the algorithm more precisely.
+#####
+关于Raft一致性算法的精简摘要(不包括成员变更和日志压缩)。
+左上方框内所描述的服务器行为被描述为一系列独立和重复触发的规则。
+章节编号例如§5.2标识了具体讨论该特定功能的章节。
+形式化规约以更精确的方式描述该算法。
+
 ![Figure3.png](Figure3.png)
+#####
+Figure 3: Raft guarantees that each of these properties is true at all times. 
+The section numbers indicate where each property is discussed.
+#####
+图3：Raft保证每一个特性在任何时候都是成立的、名副其实的。
+章节号标识着每一个特性被讨论的具体章节。
 
 ### 5.1 Raft basics(Raft基础)
 #####
@@ -438,7 +463,29 @@ Raft将时间分割为任意长度的任期(term)，如图5所示。
 Raft保证了在一个给定的任期内最多只会有一个leader。
 
 ![Figure4.png](Figure4.png)
+#####
+Figure 4: Server states. Followers only respond to requests from other servers. 
+If a follower receives no communication, it becomes a candidate and initiates an election. 
+A candidate that receives votes from a majority of the full cluster becomes the new leader.
+Leaders typically operate until they fail.
+#####
+图4：服务器状态。
+follower只能响应来自其它服务器的请求。
+如果follower没有收到通信，它将成为一名candidate并且初始化一场选举。
+一位candidate收到了来自整个集群中的大多数投票则成为新的leader。
+leader通常持续工作直到它们发生故障。
+
 ![Figure5.png](Figure5.png)
+#####
+Figure 5: Time is divided into terms, and each term begins with an election. 
+After a successful election, a single leader manages the cluster until the end of the term. 
+Some elections fail, in which case the term ends without choosing a leader.
+The transitions between terms may be observed at different times on different servers.
+#####
+图5：时间以任期进行划分，每一个任期都以一次选举开始。
+在成功的选举之后，一个leader管理集群直到任期结束。
+有些选举失败了，在这种情况下任期结束时并没有选出一个leader。
+可以在不同服务器的不同时间上观察到任期的转换。
 
 #####
 Different servers may observe the transitions between terms at different times,
@@ -550,8 +597,15 @@ Raft使用随机化的选举超时时间来确保分裂的投票很少会发生�
 每个candidate在一轮选举开始时会重新随机的设置其选举超时时间，并且在下一轮选举前等待直到超时；这减少了在新的选举中再一次出现分裂投票的可能性。
 第9.3节展示了该方法能迅速的选举出一个leader。
 
-#####
 ![Figure6.png](Figure6.png)
+#####
+Figure 6: Logs are composed of entries, which are numbered sequentially.
+Each entry contains the term in which it was created (the number in each box) and a command for the state machine. 
+An entry is considered committed if it is safe for that entry to be applied to state machines.
+#####
+图6：日志由按照顺序编号的条目组成。
+每一个条目都包含它被创建时的任期(框中的数字)以及用于状态机的指令。
+如果条目已经安全的被作用于状态机，则该条目被视为已提交。
 
 #####
 Elections are an example of how understandability guided our choice between design alternatives. 
@@ -668,6 +722,20 @@ Missing and extraneous entries in a log may span multiple terms.
 缺失的或者额外多出的条目可能涉及到多个任期。
 
 ![Figure7.png](Figure7.png)
+#####
+Figure 7: When the leader at the top comes to power, it is possible that any of scenarios (a–f) could occur in follower logs. 
+Each box represents one log entry; the number in the box is its term.
+A follower may be missing entries (a–b), may have extra uncommitted entries (c–d), or both (e–f). 
+For example, scenario (f) could occur if that server was the leader for term 2, added several entries to its log,
+then crashed before committing any of them; it restarted quickly, became leader for term 3, and added a few more entries to its log; 
+before any of the entries in either term 2 or term 3 were committed, the server crashed again and remained down for several terms.
+#####
+图7：当leader获得最高权力上台时，以下任何一种情况(a-f)都可能出现在follower的日志中。
+每一个框表示一个日志条目；框中的数字是它的任期。
+follower可能会缺少一些条目(a-b)，可能有一些额外的未提交的条目(c-d),或者两种情况皆有(e-f)。
+例如，如果一个服务器是任期2的leader，其增加了一些条目到它们的日志中，然后在提交这些日志条目之前崩溃了;
+它很快重新启动，成为了任期3的leader，并且增加了几个条目到它的日志中，在提交任期2或者任期3中的任何一个条目之前，这个服务器再次崩溃并且在后几个任期内一直处于停机状态，
+则会发生情况(f);
 
 #####
 In Raft, the leader handles inconsistencies by forcing the followers’ logs to duplicate its own. 
@@ -806,6 +874,8 @@ Raft通过比较两个日志中最后一个条目的索引和任期来决定谁�
 如果两个日志中最后的条目有着相同的任期，则较长的(注：索引值更大的)那个日志是更新的。
 
 ![Figure8.png](Figure8.png)
+#####
+
 
 ### 5.4.2 Committing entries from previous terms
 As described in Section 5.3, a leader knows that an entry from its current term is committed once

@@ -875,7 +875,24 @@ Raft通过比较两个日志中最后一个条目的索引和任期来决定谁�
 
 ![Figure8.png](Figure8.png)
 #####
-
+A time sequence showing why a leader cannot determine commitment using log entries from older terms. 
+In(a) S1 is leader and partially replicates the log entry at index2. 
+In (b) S1 crashes; S5 is elected leader for term 3 with votes from S3, S4, and itself, and accepts a different entry at log index 2.
+In (c) S5 crashes; S1 restarts, is elected leader, and continues replication.
+At this point, the log entry from term 2 has been replicated on a majority of the servers, but it is not committed. 
+If S1 crashes as in (d), S5 could be elected leader (with votes from S2, S3, and S4) and overwrite the entry with its own entry from term 3. 
+However, if S1 replicates an entry from its current term on a majority of the servers before crashing, as in (e), 
+then this entry is committed (S5 cannot win an election). 
+At this point all preceding entries in the log are committed as well.
+#####
+一个时间序列，展示了为什么leader不能使用来自旧任期的日志条目来决定是否已提交。(注：S1-S5是集群中的5台服务器，a-e是时间序列)
+在(a)中S1是leader并且部分的复制了位于index2的日志条目。
+在(b)中S1崩溃了;S5通过任期3中来自S3，S4和它自己的投票而被选举为leader，并且接受了一个不同的条目在日志index2。
+在(c)中S5崩溃了;S1重新启动，被选举为了leader，并且继续复制。
+在这个时间点，来自任期2的日志条目已经被复制到了大多数服务器中，但还没有被提交。
+如果S1像(d)中那样崩溃了，S5可以被选举为leader(通过来自S2，S3,和S4的投票)并且用它自己的来自任期3的条目进行覆盖。
+然而，如果S1在崩溃前复制了来自它当前任期的条目在大多数服务器中，就像(e),则这一条目是已提交的(S5不能赢得选举)。
+此时日志中所有之前的条目都已经被提交。
 
 ### 5.4.2 Committing entries from previous terms
 As described in Section 5.3, a leader knows that an entry from its current term is committed once
@@ -891,6 +908,13 @@ yet can still be overwritten by a future leader.
 图8展示了这样一种情况，一个老的日志条目被存储在了大多数的服务器上，但任然被未来的leader覆盖掉了。
 
 ![Figure9.png](Figure9.png)
+#####
+Figure 9: If S1 (leader for term T) commits a new log entry from its term, and S5 is elected leader for a later term U, 
+then there must be at least one server (S3) that accepted the log entry and also voted for S5.
+#####
+图9：如果S1(任期T的leader)提交了已给来自它任期的新日志条目，并且S5在后面的任期U被选举为leader,
+则至少有一个服务器(S3)能够接收该日志条目并且也投票给S5。
+
 #####
 To eliminate problems like the one in Figure 8, Raft never commits log entries from previous terms by counting replicas.
 Only log entries from the leader’s current term are committed by counting replicas;
@@ -1064,6 +1088,15 @@ Raft的RPC通常需要接收方将信息持久化到稳定的存储介质中，�
 典型的服务器平均故障间隔时间是几个月或者更多，因此对这一时间(的要求)很容易满足。
 
 ![Figure10.png](Figure10.png)
+#####
+Figure 10: Switching directly from one configuration to another is unsafe because different servers will switch at different times.
+In this example, the cluster grows from three servers to five. 
+Unfortunately, there is a point in time where two different leaders can be elected for the same term, 
+one with a majority of the old configuration (C*old*) and another with a majority of the new configuration (C*new*).
+#####
+图10：直接将一种配置切换到另一种配置是不安全的因为不同的服务器将会在不同的时间点进行切换。
+在这个例子中，集群从3台服务器增长到5台。
+不幸的是，这个时间点将会在相同的任期内选举出两个不同的leader，其中之一获得了旧配置中的大多数(C*old*)同时另一个获得了新配置中的大多数(C*new*)。
 
 ### 6 Cluster membership changes(集群成员变更)
 Up until now we have assumed that the cluster configuration (the set of servers participating in the consensus algorithm) is fixed.
@@ -1105,6 +1138,20 @@ The joint consensus combines both the old and new configurations:
 * Agreement (for elections and entry commitment) requires separate majorities from both the old and new configurations.
 
 ![Figure11.png](Figure11.png)
+#####
+Figure 11: Timeline for a configuration change.
+Dashed lines show configuration entries that have been created but not committed, and solid lines show the latest committed configuration entry.
+The leader first creates the C*old,new* configuration entry in its log and commits it to C*old,new*
+(a majority of C*old* and a majority of C*new*). 
+Then it creates the C*new* entry and commits it to a majority of C*new*.
+There is no point in time in which C*old* and C*new* can both make decisions independently.
+#####
+图11：配置变更的时间线。
+虚线标识配置条目已经被创建但还未被提交，而实现标识最新的已提交的配置条目。
+leader首先在它的日志中创建C*old,new*的配置条目并且向C*old,new*(C*old*中的大多数以及C*new*中的大多数)提交这一日志。
+然后它创建C*new*条目并且向C*new*中的大多数提交这一条目。
+没有任何一个时间点可以让C*old*和C*new*都能同时独立的做出决定。
+
 #####
 为了确保安全，配置的变更必须使用一种两阶段的方法。
 有很多方法可以实现两阶段。
@@ -1236,6 +1283,13 @@ Snapshotting is used in Chubby and ZooKeeper, and the remainder of this section 
 快照被用于Chubby和ZooKeeper中，本届的剩余部分将用于描述Raft中的快照。
 
 ![Figure12.png](Figure12.png)
+#####
+Figure 12: A server replaces the committed entries in its log(indexes 1 through 5) with a new snapshot, 
+which stores just the current state (variables x and y in this example).
+The snapshot’s last included index and term serve to position the snapshot in the log preceding entry 6.
+#####
+图12：服务器用新的快照代替其日志中已提交的条目(索引1到5)，该快照只存储了当前的状态(本例中的变量x和y)。
+快照中的last included index和term用于定位快照中的条目6之前的日志。
 
 #####
 Incremental approaches to compaction, such as log cleaning [36] and log-structured merge trees [30, 5], are also possible. 
@@ -1281,6 +1335,12 @@ However, an exceptionally slow follower or a new server joining the cluster(Sect
 The way to bring such a follower up-to-date is for the leader to send it a snapshot over the network.
 
 ![Figure13.png](Figure13.png)
+#####
+Figure 13: A summary of the InstallSnapshot RPC.
+Snapshots are split into chunks for transmission; this gives the follower a sign of life with each chunk, so it can reset its election timer.
+#####
+图13：InstallSnapshot RPC的快照。
+快照被分割为块进行传输；每一块都带给了follower其存活的标识，因此follower可以重置其选举计时器。
 
 #####
 尽管服务器通常独立的生成快照，但leader必须偶哦二的向落后的follower发送快照。
@@ -1462,6 +1522,12 @@ and experience gained from the first portion of the study.
 We compared participants’ scores on each quiz to determine whether participants showed a better understanding of Raft.
 
 ![Figure14.png](Figure14.png)
+#####
+Figure 14: A scatter plot comparing 43 participants’ performance on the Raft and Paxos quizzes. 
+Points above the diagonal (33) represent participants who scored higher for Raft.
+#####
+图14：比较43名参与者在Raft和Paxos测验中表现的散点图。
+位于对角线之上的(33个)参与者是Raft分数更高的。
 
 #####
 为了测量Raft相对于Paxos的可理解性，我们对来自斯坦福大学的高级操作系统课程和加州大学伯克利分校的分布式系统课程的高水平本科生和研究生组织了一场学习实验。
@@ -1507,6 +1573,14 @@ although we don’t know why, this does appear to be statistically significant.
 
 ![Figure15.png](Figure15.png)
 #####
+Figure 15: Using a 5-point scale, participants were asked(left) which algorithm they felt
+would be easier to implement in a functioning, correct, and efficient system, 
+and (right) which would be easier to explain to a CS graduate student.
+#####
+图15：使用5分支，参与者被问到(左侧)他们感觉使用哪种算法更容易去实现一个正常工作的，正确的，和有效的系统，
+同时(右侧)是哪种算法对于计算机科学(CS)的研究生来说会更容易解释。
+
+#####
 我们还创建了一个线性回归模型，其用于预测新生基于三个要素的测验成绩：分别是它们参加的测验，它们之前关于Paxos的经验，以及它们学习算法的顺序。
 这个模型预测选择的测验中Raft要比Paxos高12.5分。
 这明显高于观察到的4.9分的差异，因为实际上很多学生之前有过Paxos的经验，这有助于对Paxos的理解，而对于Raft的帮助则少很多。
@@ -1542,6 +1616,20 @@ Furthermore, we have written an informal proof [31] of the State Machine Safety 
 (it relies on the specification alone) and rela tively precise (it is about 3500 words long).
 
 ![Figure16.png](Figure16.png)
+#####
+Figure 16: The time to detect and replace a crashed leader.
+The top graph varies the amount of randomness in election timeouts, and the bottom graph scales the minimum election timeout. 
+Each line represents 1000 trials (except for 100 trials for “150–150ms”) and corresponds to a particular choice of election timeouts; 
+for example, “150–155ms” means that election timeouts were chosen randomly and uniformly between 150ms and 155ms. 
+The measurements were taken on a cluster of five servers with a broadcast time of roughly 15ms.
+Results for a cluster of nine servers are similar.
+#####
+图16：检测和替代一个已崩溃leader的时间。
+上图是一系列随机化的选举超时时间，下图是缩放后的最小选举超时时间。
+每一行代表了对应于一个特定选举超时时间的1000次实验(除了“150-150ms”的100次实验)；
+例如，“150-155ms”意味着选举超时时间是在150ms到155ms间随机且均匀选择的。
+测量是在一个有着5台机器的集群上进行的，其广播时间大约为15ms。
+由9台服务器组成的集群的结果是类似的。
 
 #####
 我们已经为第5节所描述的一致性机制提供了形式化规约和安全性证明。

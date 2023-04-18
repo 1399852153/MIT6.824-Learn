@@ -1,4 +1,4 @@
-package raft.common.model;
+package raft.api.model;
 
 /**
  * 日志条目

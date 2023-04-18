@@ -8,12 +8,12 @@ public class RequestVoteRpcResult {
     /**
      * 被调用者当前的任期值
      * */
-    private int term;
+    private final int term;
 
     /**
      * 是否同意投票给调用者
      * */
-    private boolean voteGranted;
+    private final boolean voteGranted;
 
     public RequestVoteRpcResult(int term, boolean voteGranted) {
         this.term = term;
@@ -24,16 +24,8 @@ public class RequestVoteRpcResult {
         return term;
     }
 
-    public void setTerm(int term) {
-        this.term = term;
-    }
-
     public boolean isVoteGranted() {
         return voteGranted;
-    }
-
-    public void setVoteGranted(boolean voteGranted) {
-        this.voteGranted = voteGranted;
     }
 
     @Override

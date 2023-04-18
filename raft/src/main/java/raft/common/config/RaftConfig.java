@@ -18,6 +18,11 @@ public class RaftConfig {
 
     private int majorityNum;
 
+    /**
+     * 选举超时时间 单位:秒
+     * */
+    private int electionTimeout;
+
     public RaftConfig(int serverId, List<Integer> raftClusterServerIdList) {
         this.serverId = serverId;
         this.raftClusterServerIdList = raftClusterServerIdList;
@@ -41,8 +46,11 @@ public class RaftConfig {
         return majorityNum;
     }
 
+    public int getElectionTimeout() {
+        return electionTimeout;
+    }
+
     private boolean isOddNumber(int num){
         return num % 2 == 1;
     }
-
 }

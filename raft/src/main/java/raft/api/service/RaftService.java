@@ -1,12 +1,14 @@
-package service;
+package raft.api.service;
 
+import raft.api.model.AppendEntriesRpcParam;
+import raft.api.model.AppendEntriesRpcResult;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 
 public interface RaftService {
 
     /**
-     * 请求投票接口
+     * 请求投票 requestVote
      *
      * Receiver implementation:
      * 1. Reply false if term < currentTerm (§5.1)
@@ -19,4 +21,9 @@ public interface RaftService {
      *    并且候选人的日志至少与被调用者的日志一样新(比较日志的任期值和索引值)，则投票给调用者(返回值里voteGranted为true)
      * */
     RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam);
+
+    /**
+     * 追加日志条目 AppendEntries
+     * */
+    AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam);
 }

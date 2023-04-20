@@ -1,5 +1,7 @@
 package raft;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import raft.api.model.AppendEntriesRpcParam;
 import raft.api.model.AppendEntriesRpcResult;
 import raft.api.model.RequestVoteRpcParam;
@@ -8,11 +10,15 @@ import raft.common.config.RaftConfig;
 import raft.common.enums.ServerStatusEnum;
 import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
+import raft.module.RaftHeartBeatBroadcastModule;
+import raft.module.RaftLeaderElectionModule;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class RaftServer implements RaftService {
+
+    private static final Logger logger = LoggerFactory.getLogger(RaftServer.class);
 
     /**
      * 当前服务节点的id(集群内全局唯一)
@@ -41,6 +47,11 @@ public class RaftServer implements RaftService {
     private volatile Integer votedFor;
 
     /**
+     * 当前服务认为的leader节点的Id
+     * */
+    private volatile Integer currentLeader;
+
+    /**
      * 集群中的其它raft节点服务
      * */
     private List<RaftServer> otherNodeInCluster;
@@ -51,23 +62,36 @@ public class RaftServer implements RaftService {
      * */
     private final List<LogEntry> logEntryList = new ArrayList<>();
 
-    private final RaftLeaderElectionModule raftLeaderElectionModule = new RaftLeaderElectionModule(this);
+    private RaftLeaderElectionModule raftLeaderElectionModule;
+    private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
 
-    public RaftServer(int serverId, RaftConfig raftConfig, List<RaftServer> otherNodeInCluster) {
-        this.serverId = serverId;
+    public RaftServer(RaftConfig raftConfig) {
+        this.serverId = raftConfig.getServerId();
         this.raftConfig = raftConfig;
         // 初始化时都是follower
         this.serverStatusEnum = ServerStatusEnum.FOLLOWER;
         // 当前任期值为0
         this.currentTerm = 0;
+    }
 
+    public void init(List<RaftServer> otherNodeInCluster){
         // 集群中的其它节点服务
         this.otherNodeInCluster = otherNodeInCluster;
+
+        raftLeaderElectionModule = new RaftLeaderElectionModule(this);
+        raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
+
+        logger.info("raft server init end! otherNodeInCluster={}, currentServerId={}",otherNodeInCluster,serverId);
     }
 
     @Override
     public RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
-        return raftLeaderElectionModule.requestVoteProcess(requestVoteRpcParam);
+        RequestVoteRpcResult requestVoteRpcResult = raftLeaderElectionModule.requestVoteProcess(requestVoteRpcParam);
+
+        logger.info("do requestVote requestVoteRpcParam={},requestVoteRpcResult={}, currentServerId={}",
+            requestVoteRpcParam,requestVoteRpcResult,this.serverId);
+
+        return requestVoteRpcResult;
     }
 
     @Override
@@ -81,12 +105,13 @@ public class RaftServer implements RaftService {
         if(appendEntriesRpcParam.getTerm() >= this.currentTerm){
             // appendEntries请求中任期值如果大于自己，说明已经有一个更新的leader了，自己转为follower，并且以对方更大的任期为准
             this.serverStatusEnum = ServerStatusEnum.FOLLOWER;
+            this.currentLeader = appendEntriesRpcParam.getLeaderId();
             this.currentTerm = appendEntriesRpcParam.getTerm();
         }
 
-        if(appendEntriesRpcParam.getEntries().isEmpty()){
+        if(appendEntriesRpcParam.getEntries() == null){
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
-            raftLeaderElectionModule.refreshLastHeartBeat();
+            raftLeaderElectionModule.refreshLastHeartBeatTime();
 
             // 心跳请求，直接返回
             return new AppendEntriesRpcResult(this.currentTerm,true);
@@ -95,7 +120,6 @@ public class RaftServer implements RaftService {
         // todo
         return null;
     }
-
 
     public int getServerId() {
         return serverId;
@@ -127,6 +151,14 @@ public class RaftServer implements RaftService {
 
     public void setVotedFor(Integer votedFor) {
         this.votedFor = votedFor;
+    }
+
+    public Integer getCurrentLeader() {
+        return currentLeader;
+    }
+
+    public void setCurrentLeader(Integer currentLeader) {
+        this.currentLeader = currentLeader;
     }
 
     public List<RaftServer> getOtherNodeInCluster() {

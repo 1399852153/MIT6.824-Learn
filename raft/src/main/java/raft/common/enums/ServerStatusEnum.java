@@ -6,7 +6,7 @@ package raft.common.enums;
 public enum ServerStatusEnum {
 
     FOLLOWER("follower-追随者"),
-    CANDIDATE("candidateI-候选者"),
+    CANDIDATE("candidate-候选者"),
     LEADER("leader-领导者"),
     ;
 

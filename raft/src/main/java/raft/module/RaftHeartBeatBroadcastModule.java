@@ -23,7 +23,7 @@ public class RaftHeartBeatBroadcastModule {
         this.currentServer = currentServer;
 
         this.scheduledExecutorService = Executors.newScheduledThreadPool(1);
-        this.rpcThreadPool = Executors.newFixedThreadPool(currentServer.getOtherNodeInCluster().size());
+        this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1));
 
         int heartbeatInternal = currentServer.getRaftConfig().getHeartbeatInternal();
 

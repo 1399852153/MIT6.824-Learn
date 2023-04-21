@@ -110,6 +110,8 @@ public class RaftServer implements RaftService {
         }
 
         if(appendEntriesRpcParam.getEntries() == null){
+            // 来自leader的心跳处理，清理掉之前选举的votedFor
+            this.votedFor = null;
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
             raftLeaderElectionModule.refreshLastHeartbeatTime();
 
@@ -167,5 +169,9 @@ public class RaftServer implements RaftService {
 
     public void setOtherNodeInCluster(List<RaftServer> otherNodeInCluster) {
         this.otherNodeInCluster = otherNodeInCluster;
+    }
+
+    public RaftLeaderElectionModule getRaftLeaderElectionModule() {
+        return raftLeaderElectionModule;
     }
 }

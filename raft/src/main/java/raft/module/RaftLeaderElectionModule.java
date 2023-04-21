@@ -32,7 +32,7 @@ public class RaftLeaderElectionModule {
         this.currentServer = currentServer;
         this.lastHeartbeatTime = new Date();
         this.scheduledExecutorService = Executors.newScheduledThreadPool(1);
-        this.rpcThreadPool = Executors.newFixedThreadPool(currentServer.getOtherNodeInCluster().size());
+        this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1));
 
         registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
     }
@@ -57,12 +57,15 @@ public class RaftLeaderElectionModule {
         if(this.currentServer.getCurrentTerm() > requestVoteRpcParam.getTerm()){
             // Reply false if term < currentTerm (§5.1)
             // 发起投票的candidate任期小于当前服务器任期，拒绝投票给它
+            logger.info("reject requestVoteProcess! term < currentTerm, currentServerId={}",currentServer.getServerId());
             return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),false);
         }
 
         if(this.currentServer.getVotedFor() != null && this.currentServer.getVotedFor() != requestVoteRpcParam.getCandidateId()){
             // If votedFor is null or candidateId（取反的卫语句）
             // 当前服务器已经把票投给了别人,拒绝投票给发起投票的candidate
+            logger.info("reject requestVoteProcess! votedFor={},currentServerId={}",
+                currentServer.getVotedFor(),currentServer.getServerId());
             return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),false);
         }
 

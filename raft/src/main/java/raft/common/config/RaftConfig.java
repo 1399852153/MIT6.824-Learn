@@ -34,6 +34,11 @@ public class RaftConfig {
      * */
     private int heartbeatInternal;
 
+    /**
+     * leader自动故障计数(用于触发自动选举的调试，和正常逻辑无关)
+     * */
+    private int leaderAutoFailCount;
+
     public RaftConfig(int serverId, List<Integer> raftClusterServerIdList) {
         this.serverId = serverId;
         this.raftClusterServerIdList = raftClusterServerIdList;
@@ -80,6 +85,14 @@ public class RaftConfig {
 
     public void setElectionTimeoutRandomRange(Range<Integer> electionTimeoutRandomRange) {
         this.electionTimeoutRandomRange = electionTimeoutRandomRange;
+    }
+
+    public int getLeaderAutoFailCount() {
+        return leaderAutoFailCount;
+    }
+
+    public void setLeaderAutoFailCount(int leaderAutoFailCount) {
+        this.leaderAutoFailCount = leaderAutoFailCount;
     }
 
     private boolean isOddNumber(int num){

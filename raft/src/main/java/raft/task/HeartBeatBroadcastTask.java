@@ -22,6 +22,8 @@ public class HeartBeatBroadcastTask implements Runnable{
     private final RaftServer currentServer;
     private final RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
 
+    private int heartbeatCount = 0;
+
     public HeartBeatBroadcastTask(RaftServer currentServer, RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule) {
         this.currentServer = currentServer;
         this.raftHeartBeatBroadcastModule = raftHeartBeatBroadcastModule;
@@ -35,6 +37,9 @@ public class HeartBeatBroadcastTask implements Runnable{
         }
 
         logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
+
+        // 先刷新自己的心跳时间
+//        this.currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
 
         // 并行的发送心跳rpc给集群中的其它节点
         List<RaftServer> otherNodeInCluster = currentServer.getOtherNodeInCluster();
@@ -64,6 +69,26 @@ public class HeartBeatBroadcastTask implements Runnable{
             }
         }
 
+        processAutoFail();
+
         logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
+    }
+
+    /**
+     * 用于测试leader故障用的逻辑，和正常逻辑无关
+     * */
+    private void processAutoFail(){
+        int leaderAutoFailCount = currentServer.getRaftConfig().getLeaderAutoFailCount();
+        if(leaderAutoFailCount <= 0){
+            // 没匹配leader自动故障，直接返回
+            return;
+        }
+
+        this.heartbeatCount++;
+        if(this.heartbeatCount % leaderAutoFailCount == 0){
+            logger.info("模拟leader自动故障，转为follower状态从而终止心跳广播，触发新的一轮选举 serverId={}",currentServer.getServerId());
+            currentServer.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
+            currentServer.setCurrentLeader(null);
+        }
     }
 }

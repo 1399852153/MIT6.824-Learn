@@ -33,13 +33,14 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
     public void run() {
         if(currentServer.getServerStatusEnum() == ServerStatusEnum.LEADER){
             // leader是不需要处理心跳超时的
+            // 注册下一个心跳检查任务
+            raftLeaderElectionModule.registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
             return;
         }
 
         logger.info("do HeartBeatTimeoutCheck start {}",currentServer.getServerId());
 
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
-
 
         // 当前时间
         Date currentDate = new Date();

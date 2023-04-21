@@ -79,6 +79,8 @@ public class RaftLeaderElectionModule {
     public void refreshLastHeartbeatTime(){
         // 刷新最新的接受到心跳的时间
         this.lastHeartbeatTime = new Date();
+        // 接受新的心跳,说明现在leader是存活的，清理掉之前的投票信息
+        this.currentServer.setVotedFor(null);
 
         logger.info("refreshLastHeartbeatTime! {}",currentServer.getServerId());
     }

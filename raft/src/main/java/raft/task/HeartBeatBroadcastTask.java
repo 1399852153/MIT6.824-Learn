@@ -39,7 +39,7 @@ public class HeartBeatBroadcastTask implements Runnable{
         logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
 
         // 先刷新自己的心跳时间
-//        this.currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
+        this.currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
 
         // 并行的发送心跳rpc给集群中的其它节点
         List<RaftServer> otherNodeInCluster = currentServer.getOtherNodeInCluster();

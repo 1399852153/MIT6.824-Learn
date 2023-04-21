@@ -27,7 +27,7 @@ public class RaftHeartBeatBroadcastModule {
 
         int heartbeatInternal = currentServer.getRaftConfig().getHeartbeatInternal();
 
-
+        // 心跳广播任务需要以固定频率执行(scheduleAtFixedRate)
         scheduledExecutorService.scheduleAtFixedRate(
             new HeartBeatBroadcastTask(currentServer,this),0,heartbeatInternal, TimeUnit.SECONDS);
     }

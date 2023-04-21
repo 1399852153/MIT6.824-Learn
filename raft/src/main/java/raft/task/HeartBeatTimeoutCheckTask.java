@@ -2,19 +2,17 @@ package raft.task;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import raft.module.RaftLeaderElectionModule;
 import raft.RaftServer;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 import raft.common.enums.ServerStatusEnum;
+import raft.module.RaftLeaderElectionModule;
 import raft.util.CommonUtil;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 心跳超时检查任务
@@ -42,15 +40,17 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
 
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
 
+
         // 当前时间
         Date currentDate = new Date();
+        Date lastHeartBeatTime = raftLeaderElectionModule.getLastHeartbeatTime();
+        long diffTime = currentDate.getTime() - lastHeartBeatTime.getTime();
 
-        long diffTime = currentDate.getTime() - raftLeaderElectionModule.getLastHeartBeatTime().getTime();
-        long randomElectionTimeout = getRandomElectionTimeout();
-
-        // 超时时间为固定的超时时间 + 随机化的超时时间
-        if(diffTime > (electionTimeout * 1000L + randomElectionTimeout)){
-            logger.info("HeartBeatTimeoutCheck check fail, trigger new election! {}",currentServer.getServerId());
+        logger.info("currentDate={}, lastHeartBeatTime={}, diffTime={}, serverId={}",
+            currentDate,lastHeartBeatTime,diffTime,currentServer.getServerId());
+        // 心跳超时判断
+        if(diffTime > (electionTimeout * 1000L)){
+            logger.info("HeartBeatTimeoutCheck check fail, trigger new election! serverId={}",currentServer.getServerId());
 
             // 距离最近一次接到心跳已经超过了选举超时时间，触发新一轮选举
 
@@ -108,14 +108,9 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             logger.info("HeartBeatTimeoutCheck check success {}",currentServer.getServerId());
         }
 
+        // 注册下一个心跳检查任务
+        raftLeaderElectionModule.registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
+
         logger.info("do HeartBeatTimeoutCheck end {}",currentServer.getServerId());
-    }
-
-    private long getRandomElectionTimeout(){
-        long min = currentServer.getRaftConfig().getElectionTimeoutRandomRange().getLeft();
-        long max = currentServer.getRaftConfig().getElectionTimeoutRandomRange().getRight();
-
-        // 生成[min,max]范围内随机整数的通用公式为：n=rand.nextInt(max-min+1)+min。
-        return ThreadLocalRandom.current().nextLong(max-min+1) + min;
     }
 }

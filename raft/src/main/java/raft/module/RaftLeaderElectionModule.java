@@ -8,10 +8,7 @@ import raft.api.model.RequestVoteRpcResult;
 import raft.task.HeartBeatTimeoutCheckTask;
 
 import java.util.Date;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Raft服务器的leader选举模块
@@ -25,26 +22,31 @@ public class RaftLeaderElectionModule {
     /**
      * 最近一次接受到心跳的时间
      * */
-    private Date lastHeartBeatTime;
+    private volatile Date lastHeartbeatTime;
 
     private final ScheduledExecutorService scheduledExecutorService;
 
     private final ExecutorService rpcThreadPool;
 
-
     public RaftLeaderElectionModule(RaftServer currentServer) {
         this.currentServer = currentServer;
-        this.lastHeartBeatTime = new Date();
+        this.lastHeartbeatTime = new Date();
         this.scheduledExecutorService = Executors.newScheduledThreadPool(1);
         this.rpcThreadPool = Executors.newFixedThreadPool(currentServer.getOtherNodeInCluster().size());
 
-        int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
+        registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
+    }
 
-        // 心跳超时检查
-        // 初始的延迟，用于控制服务启动后多久开始第一次选举
-        // 执行的周期为选举超时时间的一半，保证(当前时间-最后一次接受到心跳)>选举超时时间时，可以即时的发起新的选举
-        scheduledExecutorService.scheduleAtFixedRate(new HeartBeatTimeoutCheckTask(currentServer,this),
-            electionTimeout,electionTimeout/2, TimeUnit.SECONDS);
+    /**
+     * 提交新的延迟任务(带有随机化的超时时间)
+     * */
+    public void registerHeartBeatTimeoutCheckTaskWithRandomTimeout(){
+        int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
+        long randomElectionTimeout = getRandomElectionTimeout();
+        // 选举超时时间的基础上，加上一个随机化的时间
+        long delayTime = randomElectionTimeout + electionTimeout * 1000L;
+        scheduledExecutorService.schedule(
+            new HeartBeatTimeoutCheckTask(currentServer,this),delayTime,TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -71,18 +73,26 @@ public class RaftLeaderElectionModule {
         return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),true);
     }
 
-    public void refreshLastHeartBeatTime(){
+    public void refreshLastHeartbeatTime(){
         // 刷新最新的接受到心跳的时间
-        this.lastHeartBeatTime = new Date();
+        this.lastHeartbeatTime = new Date();
 
-        logger.info("refreshLastHeartBeatTime! {}",currentServer.getServerId());
+        logger.info("refreshLastHeartbeatTime! {}",currentServer.getServerId());
     }
 
-    public Date getLastHeartBeatTime() {
-        return lastHeartBeatTime;
+    public Date getLastHeartbeatTime() {
+        return lastHeartbeatTime;
     }
 
     public ExecutorService getRpcThreadPool() {
         return rpcThreadPool;
+    }
+
+    private long getRandomElectionTimeout(){
+        long min = currentServer.getRaftConfig().getElectionTimeoutRandomRange().getLeft();
+        long max = currentServer.getRaftConfig().getElectionTimeoutRandomRange().getRight();
+
+        // 生成[min,max]范围内随机整数的通用公式为：n=rand.nextInt(max-min+1)+min。
+        return ThreadLocalRandom.current().nextLong(max-min+1) + min;
     }
 }

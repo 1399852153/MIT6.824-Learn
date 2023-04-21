@@ -6,6 +6,7 @@ import raft.util.Range;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Test {
 
@@ -31,7 +32,12 @@ public class Test {
         }
 
         for(RaftServer raftServer : raftServerList){
-            raftServer.init(raftServerList);
+            // 排掉自己
+            List<RaftServer> otherNodeInCluster = raftServerList.stream()
+                .filter(item->item.getServerId() != raftServer.getServerId())
+                .collect(Collectors.toList());
+
+            raftServer.init(otherNodeInCluster);
         }
     }
 }

@@ -111,7 +111,7 @@ public class RaftServer implements RaftService {
 
         if(appendEntriesRpcParam.getEntries() == null){
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
-            raftLeaderElectionModule.refreshLastHeartBeatTime();
+            raftLeaderElectionModule.refreshLastHeartbeatTime();
 
             // 心跳请求，直接返回
             return new AppendEntriesRpcResult(this.currentTerm,true);

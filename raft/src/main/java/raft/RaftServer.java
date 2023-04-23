@@ -7,11 +7,13 @@ import raft.api.model.AppendEntriesRpcResult;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 import raft.common.config.RaftConfig;
+import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
 import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
+import raft.util.Range;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +56,7 @@ public class RaftServer implements RaftService {
     /**
      * 集群中的其它raft节点服务
      * */
-    private List<RaftService> otherNodeInCluster;
+    protected List<RaftService> otherNodeInCluster;
 
     /**
      * 日志条目列表

@@ -61,6 +61,10 @@ public class RaftConfig {
         return serverId;
     }
 
+    public RaftNodeConfig getCurrentNodeConfig() {
+        return currentNodeConfig;
+    }
+
     public List<RaftNodeConfig> getRaftNodeConfigList() {
         return raftNodeConfigList;
     }

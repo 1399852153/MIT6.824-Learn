@@ -54,13 +54,13 @@ public class RaftServer implements RaftService {
     /**
      * 集群中的其它raft节点服务
      * */
-    private List<RaftServer> otherNodeInCluster;
+    private List<RaftService> otherNodeInCluster;
 
     /**
      * 日志条目列表
      * todo 先不考虑日志持久化的处理
      * */
-    private final List<LogEntry> logEntryList = new ArrayList<>();
+    private List<LogEntry> logEntryList = new ArrayList<>();
 
     private RaftLeaderElectionModule raftLeaderElectionModule;
     private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
@@ -74,7 +74,7 @@ public class RaftServer implements RaftService {
         this.currentTerm = 0;
     }
 
-    public void init(List<RaftServer> otherNodeInCluster){
+    public void init(List<RaftService> otherNodeInCluster){
         // 集群中的其它节点服务
         this.otherNodeInCluster = otherNodeInCluster;
 
@@ -163,11 +163,11 @@ public class RaftServer implements RaftService {
         this.currentLeader = currentLeader;
     }
 
-    public List<RaftServer> getOtherNodeInCluster() {
+    public List<RaftService> getOtherNodeInCluster() {
         return otherNodeInCluster;
     }
 
-    public void setOtherNodeInCluster(List<RaftServer> otherNodeInCluster) {
+    public void setOtherNodeInCluster(List<RaftService> otherNodeInCluster) {
         this.otherNodeInCluster = otherNodeInCluster;
     }
 

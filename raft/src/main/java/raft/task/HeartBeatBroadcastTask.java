@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.model.AppendEntriesRpcParam;
 import raft.api.model.AppendEntriesRpcResult;
+import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftHeartBeatBroadcastModule;
 
@@ -42,9 +43,9 @@ public class HeartBeatBroadcastTask implements Runnable{
         this.currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
 
         // 并行的发送心跳rpc给集群中的其它节点
-        List<RaftServer> otherNodeInCluster = currentServer.getOtherNodeInCluster();
+        List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
         List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
-        for(RaftServer node : otherNodeInCluster){
+        for(RaftService node : otherNodeInCluster){
             Future<AppendEntriesRpcResult> future = raftHeartBeatBroadcastModule.getRpcThreadPool().submit(()->{
                 AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
                 // 心跳rpc，entries为空

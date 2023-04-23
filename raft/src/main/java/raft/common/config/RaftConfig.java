@@ -13,9 +13,14 @@ public class RaftConfig {
     private final int serverId;
 
     /**
+     * 自己的配置
+     * */
+    private final RaftNodeConfig currentNodeConfig;
+
+    /**
      * 整个集群所有的服务节点的id集合
      * */
-    private final List<Integer> raftClusterServerIdList;
+    private final List<RaftNodeConfig> raftNodeConfigList;
 
     private final int majorityNum;
 
@@ -39,24 +44,25 @@ public class RaftConfig {
      * */
     private int leaderAutoFailCount;
 
-    public RaftConfig(int serverId, List<Integer> raftClusterServerIdList) {
-        this.serverId = serverId;
-        this.raftClusterServerIdList = raftClusterServerIdList;
+    public RaftConfig(RaftNodeConfig currentNodeConfig,List<RaftNodeConfig> raftNodeConfigList) {
+        this.serverId = currentNodeConfig.getServerId();
+        this.currentNodeConfig = currentNodeConfig;
+        this.raftNodeConfigList = raftNodeConfigList;
         // 要求集群配置必须是奇数的，偶数的节点个数容错率更差
         // 例如：5个节点的集群可以容忍2个节点故障，而6个节点的集群也只能容忍2个节点故障
-        if(!isOddNumber(raftClusterServerIdList.size())){
-            throw new MyRaftException("cluster server size not odd number! " + raftClusterServerIdList);
+        if(!isOddNumber(raftNodeConfigList.size())){
+            throw new MyRaftException("cluster server size not odd number! " + raftNodeConfigList.size());
         }
 
-        this.majorityNum = this.raftClusterServerIdList.size()/2 + 1;
+        this.majorityNum = this.raftNodeConfigList.size()/2 + 1;
     }
 
     public int getServerId() {
         return serverId;
     }
 
-    public List<Integer> getRaftClusterServerIdList() {
-        return raftClusterServerIdList;
+    public List<RaftNodeConfig> getRaftNodeConfigList() {
+        return raftNodeConfigList;
     }
 
     public int getMajorityNum() {

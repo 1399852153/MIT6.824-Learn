@@ -21,6 +21,7 @@
     </build>
 
     <dependencies>
+        <!-- github里的MyRpc工程 -->
         <dependency>
             <groupId>myrpc</groupId>
             <artifactId>myrpc-core</artifactId>

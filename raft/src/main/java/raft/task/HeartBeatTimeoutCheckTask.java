@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
+import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftLeaderElectionModule;
 import raft.util.CommonUtil;
@@ -63,9 +64,9 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             currentServer.setServerStatusEnum(ServerStatusEnum.CANDIDATE);
 
             // 并行的发送请求投票的rpc给集群中的其它节点
-            List<RaftServer> otherNodeInCluster = currentServer.getOtherNodeInCluster();
+            List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
             List<Future<RequestVoteRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
-            for(RaftServer node : otherNodeInCluster){
+            for(RaftService node : otherNodeInCluster){
                 Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(()->{
                     RequestVoteRpcParam requestVoteRpcParam = new RequestVoteRpcParam();
                     requestVoteRpcParam.setTerm(currentServer.getCurrentTerm());

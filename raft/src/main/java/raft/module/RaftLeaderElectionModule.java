@@ -31,7 +31,7 @@ public class RaftLeaderElectionModule {
     public RaftLeaderElectionModule(RaftServer currentServer) {
         this.currentServer = currentServer;
         this.lastHeartbeatTime = new Date();
-        this.scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        this.scheduledExecutorService = Executors.newScheduledThreadPool(3);
         this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1));
 
         registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
@@ -41,10 +41,13 @@ public class RaftLeaderElectionModule {
      * 提交新的延迟任务(带有随机化的超时时间)
      * */
     public void registerHeartBeatTimeoutCheckTaskWithRandomTimeout(){
+//        logger.info("registerHeartBeatTimeoutCheckTaskWithRandomTimeout!");
+
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
         long randomElectionTimeout = getRandomElectionTimeout();
         // 选举超时时间的基础上，加上一个随机化的时间
         long delayTime = randomElectionTimeout + electionTimeout * 1000L;
+        logger.info("registerHeartBeatTimeoutCheckTaskWithRandomTimeout delayTime={}",delayTime);
         scheduledExecutorService.schedule(
             new HeartBeatTimeoutCheckTask(currentServer,this),delayTime,TimeUnit.MILLISECONDS);
     }
@@ -80,7 +83,7 @@ public class RaftLeaderElectionModule {
         // 刷新最新的接受到心跳的时间
         this.lastHeartbeatTime = new Date();
         // 接受新的心跳,说明现在leader是存活的，清理掉之前的投票信息
-        this.currentServer.setVotedFor(null);
+        this.currentServer.cleanVotedFor();
 
         logger.info("refreshLastHeartbeatTime! {}",currentServer.getServerId());
     }

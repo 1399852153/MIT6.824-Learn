@@ -8,12 +8,15 @@ public class AppendEntriesRpcResult {
     /**
      * 被调用者当前的任期值
      * */
-    private final int term;
+    private int term;
 
     /**
      * 是否处理成功
      * */
-    private final boolean success;
+    private boolean success;
+
+    public AppendEntriesRpcResult() {
+    }
 
     public AppendEntriesRpcResult(int term, boolean success) {
         this.term = term;
@@ -24,7 +27,15 @@ public class AppendEntriesRpcResult {
         return term;
     }
 
+    public void setTerm(int term) {
+        this.term = term;
+    }
+
     public boolean isSuccess() {
         return success;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
     }
 }

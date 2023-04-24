@@ -1,6 +1,7 @@
 package raft;
 
 import myrpc.common.URLAddress;
+import myrpc.consumer.context.ConsumerRpcContext;
 import myrpc.consumer.context.ConsumerRpcContextHolder;
 import raft.api.model.AppendEntriesRpcParam;
 import raft.api.model.AppendEntriesRpcResult;
@@ -34,8 +35,8 @@ public class RaftRpcConsumer implements RaftService {
     }
 
     private void setTargetProviderUrl(){
-        URLAddress targetProviderAddress = ConsumerRpcContextHolder.getConsumerRpcContext().getTargetProviderAddress();
-        targetProviderAddress.setHost(targetNodeConfig.getIp());
-        targetProviderAddress.setPort(targetNodeConfig.getPort());
+        ConsumerRpcContext consumerRpcContext = ConsumerRpcContextHolder.getConsumerRpcContext();
+        consumerRpcContext.setTargetProviderAddress(
+            new URLAddress(targetNodeConfig.getIp(),targetNodeConfig.getPort()));
     }
 }

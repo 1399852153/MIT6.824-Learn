@@ -26,11 +26,11 @@ public class RaftClusterGlobalConfig {
      * raft的集群配置
      * */
     public static final List<RaftNodeConfig> raftNodeConfigList = Arrays.asList(
-        new RaftNodeConfig(1,"localhost",8001),
-        new RaftNodeConfig(2,"localhost",8002),
-        new RaftNodeConfig(3,"localhost",8003),
-        new RaftNodeConfig(4,"localhost",8004),
-        new RaftNodeConfig(5,"localhost",8005)
+        new RaftNodeConfig(1,"127.0.0.1",8001),
+        new RaftNodeConfig(2,"127.0.0.1",8002),
+        new RaftNodeConfig(3,"127.0.0.1",8003)
+//       , new RaftNodeConfig(4,"localhost",8004),
+//        new RaftNodeConfig(5,"localhost",8005)
     );
 
     public static final int electionTimeout = 3;
@@ -41,12 +41,12 @@ public class RaftClusterGlobalConfig {
      * N次心跳后，leader会自动模拟出现故障(退回follow，停止心跳广播)
      * N<=0代表不出自动模拟故障
      */
-    public static final int leaderAutoFailCount = 10;
+    public static final int leaderAutoFailCount = 0;
 
     /**
      * 随机化的选举超时时间
      * */
-    public static final Range<Integer> electionTimeoutRandomRange = new Range<>(150,300);
+    public static final Range<Integer> electionTimeoutRandomRange = new Range<>(150,500);
 
     public static void initRaftRpcServer(int serverId){
         RaftNodeConfig currentNodeConfig = RaftClusterGlobalConfig.raftNodeConfigList

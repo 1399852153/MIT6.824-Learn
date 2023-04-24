@@ -98,6 +98,13 @@ public class RaftServer implements RaftService {
 
     @Override
     public AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
+        AppendEntriesRpcResult appendEntriesRpcResult = doAppendEntries(appendEntriesRpcParam);
+        logger.info("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
+            appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
+        return appendEntriesRpcResult;
+    }
+
+    private AppendEntriesRpcResult doAppendEntries(AppendEntriesRpcParam appendEntriesRpcParam){
         if(appendEntriesRpcParam.getTerm() < this.currentTerm){
             // Reply false if term < currentTerm (§5.1)
             // 拒绝处理任期低于自己的老leader的请求
@@ -113,7 +120,7 @@ public class RaftServer implements RaftService {
 
         if(appendEntriesRpcParam.getEntries() == null){
             // 来自leader的心跳处理，清理掉之前选举的votedFor
-            this.votedFor = null;
+            this.cleanVotedFor();
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
             raftLeaderElectionModule.refreshLastHeartbeatTime();
 
@@ -171,6 +178,10 @@ public class RaftServer implements RaftService {
 
     public void setOtherNodeInCluster(List<RaftService> otherNodeInCluster) {
         this.otherNodeInCluster = otherNodeInCluster;
+    }
+
+    public void cleanVotedFor(){
+        this.votedFor = null;
     }
 
     public RaftLeaderElectionModule getRaftLeaderElectionModule() {

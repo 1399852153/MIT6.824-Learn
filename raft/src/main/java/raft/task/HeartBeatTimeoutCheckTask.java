@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 心跳超时检查任务
@@ -36,9 +37,19 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             // leader是不需要处理心跳超时的
             // 注册下一个心跳检查任务
             raftLeaderElectionModule.registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
-            return;
-        }
+        }else{
+            try {
+                doTask();
+            }catch (Exception e){
+                logger.info("do HeartBeatTimeoutCheckTask error! ignore",e);
+            }
 
+            // 注册下一个心跳检查任务
+            raftLeaderElectionModule.registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
+        }
+    }
+
+    private void doTask(){
         logger.info("do HeartBeatTimeoutCheck start {}",currentServer.getServerId());
 
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
@@ -65,6 +76,7 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
 
             // 并行的发送请求投票的rpc给集群中的其它节点
             List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
+            logger.info("otherNodeInCluster.size={}",otherNodeInCluster.size());
             List<Future<RequestVoteRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
             for(RaftService node : otherNodeInCluster){
                 Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(()->{
@@ -79,11 +91,20 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             }
 
             List<RequestVoteRpcResult> requestVoteRpcResultList = new ArrayList<>(otherNodeInCluster.size());
-            for(Future<RequestVoteRpcResult> future : futureList){
+            for(int i=0; i<futureList.size(); i++){
+                Future<RequestVoteRpcResult> future = futureList.get(i);
                 try {
-                    RequestVoteRpcResult rpcResult = future.get();
+                    RequestVoteRpcResult rpcResult = future.get(2,TimeUnit.SECONDS);
                     requestVoteRpcResultList.add(rpcResult);
+
+                    // If RPC request or response contains term T > currentTerm:
+                    // set currentTerm = T, convert to follower (§5.1)
+                    if(rpcResult.getTerm() > currentServer.getCurrentTerm()){
+                        currentServer.setCurrentTerm(rpcResult.getTerm());
+                        currentServer.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
+                    }
                 } catch (Exception e) {
+                    logger.info("requestVote rpc error! ignore futureIndex={}",i,e);
                     // rpc异常，认为投票失败，忽略之
                 }
             }
@@ -105,13 +126,12 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                 // 票数不过半，无法成为leader
                 logger.info("HeartBeatTimeoutCheck election, not become a leader! {}",currentServer.getServerId());
             }
+
+            this.currentServer.cleanVotedFor();
         }else{
             // 认定为心跳正常，无事发生
             logger.info("HeartBeatTimeoutCheck check success {}",currentServer.getServerId());
         }
-
-        // 注册下一个心跳检查任务
-        raftLeaderElectionModule.registerHeartBeatTimeoutCheckTaskWithRandomTimeout();
 
         logger.info("do HeartBeatTimeoutCheck end {}",currentServer.getServerId());
     }

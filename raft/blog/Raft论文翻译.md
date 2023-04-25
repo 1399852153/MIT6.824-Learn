@@ -597,16 +597,6 @@ Raft使用随机化的选举超时时间来确保分裂的投票很少会发生�
 每个candidate在一轮选举开始时会重新随机的设置其选举超时时间，并且在下一轮选举前等待直到超时；这减少了在新的选举中再一次出现分裂投票的可能性。
 第9.3节展示了该方法能迅速的选举出一个leader。
 
-![Figure6.png](Figure6.png)
-#####
-Figure 6: Logs are composed of entries, which are numbered sequentially.
-Each entry contains the term in which it was created (the number in each box) and a command for the state machine. 
-An entry is considered committed if it is safe for that entry to be applied to state machines.
-#####
-图6：日志由按照顺序编号的条目组成。
-每一个条目都包含它被创建时的任期(框中的数字)以及用于状态机的指令。
-如果条目已经安全的被作用于状态机，则该条目被视为已提交。
-
 #####
 Elections are an example of how understandability guided our choice between design alternatives. 
 Initially we planned to use a ranking system: each candidate was assigned a unique rank, which was used to select between competing candidates.
@@ -643,6 +633,16 @@ leader将指令作为一个新的条目追加到其日志中，然后向其它�
 当条目已被安全的被复制(如下所述)，leader在它的状态机上应用这一条目并且将执行的结果返回给客户端。
 如果follower崩溃了或者运行的很慢，或者网络失包，leader会无限的重试AppendEntries RPC(即使在响应了客户端的请求之后)，
 直到所有的follower最终都存储了所有的日志条目。
+
+![Figure6.png](Figure6.png)
+#####
+Figure 6: Logs are composed of entries, which are numbered sequentially.
+Each entry contains the term in which it was created (the number in each box) and a command for the state machine.
+An entry is considered committed if it is safe for that entry to be applied to state machines.
+#####
+图6：日志由按照顺序编号的条目组成。
+每一个条目都包含它被创建时的任期(框中的数字)以及用于状态机的指令。
+如果条目已经安全的被作用于状态机，则该条目被视为已提交。
 
 #####
 Logs are organized as shown in Figure 6. 

@@ -94,15 +94,10 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             for(int i=0; i<futureList.size(); i++){
                 Future<RequestVoteRpcResult> future = futureList.get(i);
                 try {
-                    RequestVoteRpcResult rpcResult = future.get(2,TimeUnit.SECONDS);
+                    RequestVoteRpcResult rpcResult = future.get(1,TimeUnit.SECONDS);
                     requestVoteRpcResultList.add(rpcResult);
 
-                    // If RPC request or response contains term T > currentTerm:
-                    // set currentTerm = T, convert to follower (§5.1)
-                    if(rpcResult.getTerm() > currentServer.getCurrentTerm()){
-                        currentServer.setCurrentTerm(rpcResult.getTerm());
-                        currentServer.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
-                    }
+                    currentServer.processRpcResponseHigherTerm(rpcResult.getTerm());
                 } catch (Exception e) {
                     logger.info("requestVote rpc error! ignore futureIndex={}",i,e);
                     // rpc异常，认为投票失败，忽略之
@@ -117,14 +112,14 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             // totalNodeCount = 集群中总节点数
             boolean majorVoted = CommonUtil.hasMajorVoted(getRpcVoted+1,otherNodeInCluster.size()+1);
             if(majorVoted){
-                logger.info("HeartBeatTimeoutCheck election, become a leader! {}",currentServer.getServerId());
+                logger.info("HeartBeatTimeoutCheck election result: become a leader! {}",currentServer.getServerId());
 
                 // 投票成功，成为leader
                 currentServer.setServerStatusEnum(ServerStatusEnum.LEADER);
                 currentServer.setCurrentLeader(currentServer.getServerId());
             }else{
                 // 票数不过半，无法成为leader
-                logger.info("HeartBeatTimeoutCheck election, not become a leader! {}",currentServer.getServerId());
+                logger.info("HeartBeatTimeoutCheck election result: not become a leader! {}",currentServer.getServerId());
             }
 
             this.currentServer.cleanVotedFor();

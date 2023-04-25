@@ -29,8 +29,8 @@ public class RaftClusterGlobalConfig {
         new RaftNodeConfig(1,"127.0.0.1",8001),
         new RaftNodeConfig(2,"127.0.0.1",8002),
         new RaftNodeConfig(3,"127.0.0.1",8003)
-//       , new RaftNodeConfig(4,"localhost",8004),
-//        new RaftNodeConfig(5,"localhost",8005)
+       , new RaftNodeConfig(4,"127.0.0.1",8004),
+        new RaftNodeConfig(5,"127.0.0.1",8005)
     );
 
     public static final int electionTimeout = 3;

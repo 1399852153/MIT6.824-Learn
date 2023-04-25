@@ -61,18 +61,10 @@ public class HeartBeatBroadcastTask implements Runnable{
             futureList.add(future);
         }
 
-        List<AppendEntriesRpcResult> heartbeatRpcResultList = new ArrayList<>(otherNodeInCluster.size());
         for(Future<AppendEntriesRpcResult> future : futureList){
             try {
                 AppendEntriesRpcResult rpcResult = future.get(1, TimeUnit.SECONDS);
-                heartbeatRpcResultList.add(rpcResult);
-
-                // If RPC request or response contains term T > currentTerm:
-                // set currentTerm = T, convert to follower (§5.1)
-                if(rpcResult.getTerm() > currentServer.getCurrentTerm()){
-                    currentServer.setCurrentTerm(rpcResult.getTerm());
-                    currentServer.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
-                }
+                currentServer.processRpcResponseHigherTerm(rpcResult.getTerm());
             } catch (Exception e) {
                 // 心跳rpc异常，忽略之
                 logger.info("do heartBeat broadcast error!",e);

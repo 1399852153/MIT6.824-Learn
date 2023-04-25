@@ -180,11 +180,29 @@ public class RaftServer implements RaftService {
         this.otherNodeInCluster = otherNodeInCluster;
     }
 
+    public RaftLeaderElectionModule getRaftLeaderElectionModule() {
+        return raftLeaderElectionModule;
+    }
+
+    // ============================= public的业务接口 =================================
+
+    /**
+     * 清空votedFor
+     * */
     public void cleanVotedFor(){
         this.votedFor = null;
     }
 
-    public RaftLeaderElectionModule getRaftLeaderElectionModule() {
-        return raftLeaderElectionModule;
+    /**
+     * rpc响应的任期高于当前节点任期的处理
+     *
+     * If RPC request or response contains term T > currentTerm:
+     * set currentTerm = T, convert to follower (§5.1)
+     * */
+    public void processRpcResponseHigherTerm(int rpcResponseTerm){
+        if(rpcResponseTerm > this.getCurrentTerm()) {
+            this.setCurrentTerm(rpcResponseTerm);
+            this.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
+        }
     }
 }

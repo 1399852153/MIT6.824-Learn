@@ -78,11 +78,13 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
             logger.info("otherNodeInCluster.size={}",otherNodeInCluster.size());
             List<Future<RequestVoteRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
+
+            // 构造请求参数
+            RequestVoteRpcParam requestVoteRpcParam = new RequestVoteRpcParam();
+            requestVoteRpcParam.setTerm(currentServer.getCurrentTerm());
+            requestVoteRpcParam.setCandidateId(currentServer.getServerId());
             for(RaftService node : otherNodeInCluster){
                 Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(()->{
-                    RequestVoteRpcParam requestVoteRpcParam = new RequestVoteRpcParam();
-                    requestVoteRpcParam.setTerm(currentServer.getCurrentTerm());
-                    requestVoteRpcParam.setCandidateId(currentServer.getServerId());
                     // todo 日志复制相关的先不考虑
                     return node.requestVote(requestVoteRpcParam);
                 });

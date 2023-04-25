@@ -46,14 +46,14 @@ public class HeartBeatBroadcastTask implements Runnable{
         // 并行的发送心跳rpc给集群中的其它节点
         List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
         List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
+
+        // 构造请求参数(心跳rpc，entries为空)
+        AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
+        appendEntriesRpcParam.setEntries(null);
+        appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
+        appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
         for(RaftService node : otherNodeInCluster){
             Future<AppendEntriesRpcResult> future = raftHeartBeatBroadcastModule.getRpcThreadPool().submit(()->{
-                AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
-                // 心跳rpc，entries为空
-                appendEntriesRpcParam.setEntries(null);
-                appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
-                appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
-
                 // todo 日志复制相关的先不考虑
                 return node.appendEntries(appendEntriesRpcParam);
             });

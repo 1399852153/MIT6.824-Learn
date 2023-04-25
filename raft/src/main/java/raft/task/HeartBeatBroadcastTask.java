@@ -64,7 +64,7 @@ public class HeartBeatBroadcastTask implements Runnable{
         for(Future<AppendEntriesRpcResult> future : futureList){
             try {
                 AppendEntriesRpcResult rpcResult = future.get(1, TimeUnit.SECONDS);
-                currentServer.processRpcResponseHigherTerm(rpcResult.getTerm());
+                currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
             } catch (Exception e) {
                 // 心跳rpc异常，忽略之
                 logger.info("do heartBeat broadcast error!",e);

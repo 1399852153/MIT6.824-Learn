@@ -27,4 +27,13 @@ public class RaftNodeConfig {
     public int getPort() {
         return port;
     }
+
+    @Override
+    public String toString() {
+        return "RaftNodeConfig{" +
+            "serverId=" + serverId +
+            ", ip='" + ip + '\'' +
+            ", port=" + port +
+            '}';
+    }
 }

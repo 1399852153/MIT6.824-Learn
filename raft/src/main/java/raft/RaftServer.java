@@ -7,13 +7,11 @@ import raft.api.model.AppendEntriesRpcResult;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 import raft.common.config.RaftConfig;
-import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
 import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
-import raft.util.Range;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,6 +88,8 @@ public class RaftServer implements RaftService {
     public RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
         RequestVoteRpcResult requestVoteRpcResult = raftLeaderElectionModule.requestVoteProcess(requestVoteRpcParam);
 
+        processCommunicationHigherTerm(requestVoteRpcParam.getTerm());
+
         logger.info("do requestVote requestVoteRpcParam={},requestVoteRpcResult={}, currentServerId={}",
             requestVoteRpcParam,requestVoteRpcResult,this.serverId);
 
@@ -99,6 +99,9 @@ public class RaftServer implements RaftService {
     @Override
     public AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
         AppendEntriesRpcResult appendEntriesRpcResult = doAppendEntries(appendEntriesRpcParam);
+
+        processCommunicationHigherTerm(appendEntriesRpcParam.getTerm());
+
         logger.info("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
             appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
         return appendEntriesRpcResult;
@@ -194,14 +197,15 @@ public class RaftServer implements RaftService {
     }
 
     /**
-     * rpc响应的任期高于当前节点任期的处理
+     * rpc交互时任期高于当前节点任期的处理
+     * (同时包括接到的rpc请求以及得到的rpc响应，只要另一方的term高于当前节点的term，就更新当前节点的term值)
      *
-     * If RPC request or response contains term T > currentTerm:
-     * set currentTerm = T, convert to follower (§5.1)
+     * Current terms are exchanged whenever servers communicate;
+     * if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
      * */
-    public void processRpcResponseHigherTerm(int rpcResponseTerm){
-        if(rpcResponseTerm > this.getCurrentTerm()) {
-            this.setCurrentTerm(rpcResponseTerm);
+    public void processCommunicationHigherTerm(int rpcOtherTerm){
+        if(rpcOtherTerm > this.getCurrentTerm()) {
+            this.setCurrentTerm(rpcOtherTerm);
             this.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
         }
     }

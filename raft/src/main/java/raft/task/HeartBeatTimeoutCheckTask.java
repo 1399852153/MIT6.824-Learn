@@ -97,7 +97,7 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                     RequestVoteRpcResult rpcResult = future.get(1,TimeUnit.SECONDS);
                     requestVoteRpcResultList.add(rpcResult);
 
-                    currentServer.processRpcResponseHigherTerm(rpcResult.getTerm());
+                    currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
                 } catch (Exception e) {
                     logger.info("requestVote rpc error! ignore futureIndex={}",i,e);
                     // rpc异常，认为投票失败，忽略之

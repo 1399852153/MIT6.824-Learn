@@ -631,7 +631,7 @@ until all followers eventually store all log entries.
 每一个客户端的请求都包含了一个被用于在复制状态机上执行的指令。
 leader将指令作为一个新的条目追加到其日志中，然后向其它的每个服务器发起并行的AppendEntries RPC令它们复制这一条目。
 当条目已被安全的被复制(如下所述)，leader在它的状态机上应用这一条目并且将执行的结果返回给客户端。
-如果follower崩溃了或者运行的很慢，或者网络失包，leader会无限的重试AppendEntries RPC(即使在响应了客户端的请求之后)，
+如果follower崩溃了或者运行的很慢，或者网络丢包，leader会无限的重试AppendEntries RPC(即使在响应了客户端的请求之后)，
 直到所有的follower最终都存储了所有的日志条目。
 
 ![Figure6.png](Figure6.png)
@@ -894,7 +894,7 @@ At this point all preceding entries in the log are committed as well.
 然而，如果S1在崩溃前复制了来自它当前任期的条目在大多数服务器中，就像(e),则这一条目是已提交的(S5不能赢得选举)。
 此时日志中所有之前的条目都已经被提交。
 
-### 5.4.2 Committing entries from previous terms
+### 5.4.2 Committing entries from previous terms(来自之前任期的已提交条目)
 As described in Section 5.3, a leader knows that an entry from its current term is committed once
 that entry is stored on a majority of the servers. 
 If a leader crashes before committing an entry, future leaders will attempt to finish replicating the entry. 
@@ -1036,7 +1036,7 @@ Raft通过无限的重试来处理这些失败，如果已崩溃的服务器重�
 Raft的RPC是幂等的，所以这不会有问题。
 例如，如果一个follower接受到的一个AppendEntries请求中包含的日志条目已经在它自己的日志中了，该follower就会在这次新的请求中忽略掉这些条目。
 
-##### 5.6 Timing and availability(时间和可用性)
+### 5.6 Timing and availability(时间和可用性)
 One of our requirements for Raft is that safety must not depend on timing: 
 the system must not produce incorrect results just because some event happens more quickly or slowly than expected. 
 However, availability (the ability of the system to respond to clients in a timely manner) must inevitably depend on timing. 

@@ -613,7 +613,7 @@ Eventually we concluded that the randomized retry approach is more obvious and u
 如果一个candidate发现了一个具有更高等级的candidate，它将返回到follower状态因此更好等级的candidate将更容易赢得下一次选举。
 但我们发现这个方法在可用性方面存在微妙的问题(如果一个高等级的服务器故障了，则一个低等级的服务器可能需要超时并再次成为candidate，但如果这样做的太早，它将会重置选举leader的进度)。
 我们对算法进行了数次调整，但每次调整后都出现了新的困境。
-最终我们得出结论，随机化重试的方法更显然且更容易被理解。
+最终我们得出结论，随机化重试的方法更直观且更容易被理解。 
 
 ### 5.3 Log replication(日志复制)
 #####

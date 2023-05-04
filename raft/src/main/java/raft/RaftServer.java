@@ -135,6 +135,8 @@ public class RaftServer implements RaftService {
         return null;
     }
 
+    // ================================= get/set ============================================
+
     public int getServerId() {
         return serverId;
     }

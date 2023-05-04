@@ -1,5 +1,7 @@
 package raft.api.model;
 
+import raft.api.command.Command;
+
 /**
  * 日志条目
  * */

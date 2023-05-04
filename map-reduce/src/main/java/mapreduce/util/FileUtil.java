@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -65,7 +66,7 @@ public class FileUtil {
             throw new MapReduceException("writeInFile error! fileName=" + file.getName(), e);
         }
 
-        try(BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file)))){
+        try(BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(file.toPath())))){
             for(KVPair kvItem : kvPairs){
                 // 一个k/v对，key和value各占一行
                 bufferedWriter.write(kvItem.getKey());
@@ -74,7 +75,7 @@ public class FileUtil {
                 bufferedWriter.write(System.lineSeparator());
             }
         }catch (IOException e){
-            throw new MapReduceException("FileUtil.appendFile error",e);
+            throw new MapReduceException("FileUtil.writeInKVPairsInFile error",e);
         }
     }
 

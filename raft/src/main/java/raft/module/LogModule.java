@@ -43,7 +43,8 @@ public class LogModule {
             randomAccessFile.writeInt(logEntry.getLogIndex());
             randomAccessFile.writeInt(logEntry.getLogTerm());
 
-            // todo 思考一下，如果写到一半宕机了，写入的数据会不会是不完整的？
+            // todo 思考一下，如果写到一半宕机了，写入的数据不完整怎么办？
+            // 持久化currentOffset的值，二阶段提交修改currentOffset的值，宕机恢复时以持久化的值为准
 
             byte[] commandBytes = JsonUtil.obj2Str(logEntry.getCommand()).getBytes(StandardCharsets.UTF_8);
             randomAccessFile.writeInt(commandBytes.length);

@@ -5,8 +5,11 @@ package raft.api.command;
  * */
 public class SetCommand implements Command{
 
-    private final String key;
-    private final String value;
+    private String key;
+    private String value;
+
+    public SetCommand() {
+    }
 
     public SetCommand(String key, String value) {
         this.key = key;

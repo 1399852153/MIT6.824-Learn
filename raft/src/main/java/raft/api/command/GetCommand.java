@@ -2,7 +2,10 @@ package raft.api.command;
 
 public class GetCommand implements Command{
 
-    private final String key;
+    private String key;
+
+    public GetCommand() {
+    }
 
     public GetCommand(String key) {
         this.key = key;

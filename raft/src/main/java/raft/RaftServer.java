@@ -1,15 +1,15 @@
 package raft;
 
+import myrpc.common.URLAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import raft.api.model.AppendEntriesRpcParam;
-import raft.api.model.AppendEntriesRpcResult;
-import raft.api.model.RequestVoteRpcParam;
-import raft.api.model.RequestVoteRpcResult;
+import raft.api.model.*;
 import raft.common.config.RaftConfig;
+import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
-import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
+import raft.exception.MyRaftException;
+import raft.module.LogModule;
 import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
 
@@ -56,12 +56,7 @@ public class RaftServer implements RaftService {
      * */
     protected List<RaftService> otherNodeInCluster;
 
-    /**
-     * 日志条目列表
-     * todo 先不考虑日志持久化的处理
-     * */
-    private List<LogEntry> logEntryList = new ArrayList<>();
-
+    private LogModule logModule;
     private RaftLeaderElectionModule raftLeaderElectionModule;
     private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
 
@@ -80,6 +75,7 @@ public class RaftServer implements RaftService {
 
         raftLeaderElectionModule = new RaftLeaderElectionModule(this);
         raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
+//        logModule = new LogModule();
 
         logger.info("raft server init end! otherNodeInCluster={}, currentServerId={}",otherNodeInCluster,serverId);
     }
@@ -105,6 +101,28 @@ public class RaftServer implements RaftService {
         logger.info("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
             appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
         return appendEntriesRpcResult;
+    }
+
+    @Override
+    public synchronized ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
+        if(this.serverStatusEnum != ServerStatusEnum.LEADER){
+            if(this.currentLeader == null){
+                // 自己不是leader，也不知道谁是leader直接报错
+                throw new MyRaftException("current node not leader，and leader is null!" + this.serverId);
+            }
+
+            RaftNodeConfig leaderConfig = this.raftConfig.getRaftNodeConfigList()
+                    .stream().filter(item->item.getServerId() == this.currentLeader).findAny().get();
+
+            // 把自己认为的leader告诉客户端
+            ClientRequestResult clientRequestResult = new ClientRequestResult();
+            clientRequestResult.setLeaderAddress(new URLAddress(leaderConfig.getIp(),leaderConfig.getPort()));
+            return clientRequestResult;
+        }
+
+        // 自己是leader，处理客户端的请求
+
+        return null;
     }
 
     private AppendEntriesRpcResult doAppendEntries(AppendEntriesRpcParam appendEntriesRpcParam){

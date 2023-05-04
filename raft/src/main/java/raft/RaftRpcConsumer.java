@@ -5,12 +5,10 @@ import myrpc.consumer.context.ConsumerRpcContext;
 import myrpc.consumer.context.ConsumerRpcContextHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import raft.api.model.AppendEntriesRpcParam;
-import raft.api.model.AppendEntriesRpcResult;
-import raft.api.model.RequestVoteRpcParam;
-import raft.api.model.RequestVoteRpcResult;
+import raft.api.model.*;
 import raft.api.service.RaftService;
 import raft.common.config.RaftNodeConfig;
+import raft.exception.MyRaftException;
 import raft.task.HeartBeatTimeoutCheckTask;
 
 public class RaftRpcConsumer implements RaftService {
@@ -41,6 +39,12 @@ public class RaftRpcConsumer implements RaftService {
         // 强制指定rpc目标的ip/port
         setTargetProviderUrl();
         return raftServiceProxy.appendEntries(appendEntriesRpcParam);
+    }
+
+    @Override
+    public ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
+        // 只有raft的客户端才会调用这个方法，服务端是不会调用这个方法的
+        throw new MyRaftException("raft server node can not be invoke clientRequest!");
     }
 
     private void setTargetProviderUrl(){

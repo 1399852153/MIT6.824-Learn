@@ -1,9 +1,6 @@
 package raft.api.service;
 
-import raft.api.model.AppendEntriesRpcParam;
-import raft.api.model.AppendEntriesRpcResult;
-import raft.api.model.RequestVoteRpcParam;
-import raft.api.model.RequestVoteRpcResult;
+import raft.api.model.*;
 
 public interface RaftService {
 
@@ -26,4 +23,9 @@ public interface RaftService {
      * 追加日志条目 AppendEntries
      * */
     AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam);
+
+    /**
+     * 客户端的请求
+     * */
+    ClientRequestResult clientRequest(ClientRequestParam clientRequestParam);
 }

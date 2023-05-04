@@ -21,4 +21,28 @@ public class LogEntry {
      * 具体作用在状态机上的指令
      * */
     private Command command;
+
+    public int getLogTerm() {
+        return logTerm;
+    }
+
+    public void setLogTerm(int logTerm) {
+        this.logTerm = logTerm;
+    }
+
+    public int getLogIndex() {
+        return logIndex;
+    }
+
+    public void setLogIndex(int logIndex) {
+        this.logIndex = logIndex;
+    }
+
+    public Command getCommand() {
+        return command;
+    }
+
+    public void setCommand(Command command) {
+        this.command = command;
+    }
 }

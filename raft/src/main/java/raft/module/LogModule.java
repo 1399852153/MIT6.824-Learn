@@ -4,11 +4,9 @@ import myrpc.serialize.json.JsonUtil;
 import raft.api.command.Command;
 import raft.api.model.LogEntry;
 import raft.exception.MyRaftException;
+import raft.util.RaftFileUtil;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 
 public class LogModule {
@@ -16,6 +14,7 @@ public class LogModule {
     private static final int LONG_SIZE = 8;
 
     private final File logFile;
+    private final RandomAccessFile logMetaDataFile;
 
     /**
      * 每条记录后面都带上这个，用于找到
@@ -28,12 +27,26 @@ public class LogModule {
     private long lastIndex;
     private long lastCommittedIndex;
 
-    public LogModule(File logFile) {
-        this.logFile = logFile;
-        this.currentOffset = logFile.length();
+    public LogModule(int serverId) throws IOException {
+        String userPath = System.getProperty("user.dir");
+
+        this.logFile = new File(userPath + File.separator + "raftLog" + serverId + ".txt");
+        RaftFileUtil.createFile(logFile);
+
+        File logMetaDataFile = new File(userPath + File.separator + "raftLogMeta" + serverId + ".txt");
+        RaftFileUtil.createFile(logMetaDataFile);
+
+        this.logMetaDataFile = new RandomAccessFile(logMetaDataFile,"rw");
+
+        if(this.logMetaDataFile.length() >= LONG_SIZE){
+            this.currentOffset = this.logMetaDataFile.readLong();
+        }else{
+            this.currentOffset = 0;
+        }
     }
 
     /**
+     * 按照顺序追加写入日志
      * */
     public synchronized void writeLog(LogEntry logEntry){
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"rw")){
@@ -43,9 +56,6 @@ public class LogModule {
             randomAccessFile.writeInt(logEntry.getLogIndex());
             randomAccessFile.writeInt(logEntry.getLogTerm());
 
-            // todo 思考一下，如果写到一半宕机了，写入的数据不完整怎么办？
-            // 持久化currentOffset的值，二阶段提交修改currentOffset的值，宕机恢复时以持久化的值为准
-
             byte[] commandBytes = JsonUtil.obj2Str(logEntry.getCommand()).getBytes(StandardCharsets.UTF_8);
             randomAccessFile.writeInt(commandBytes.length);
             randomAccessFile.write(commandBytes);
@@ -53,6 +63,9 @@ public class LogModule {
 
             // 更新偏移量
             this.currentOffset = randomAccessFile.getFilePointer();
+
+            // 持久化currentOffset的值，二阶段提交修改currentOffset的值，宕机恢复时以持久化的值为准
+            refreshMetadata();
         } catch (IOException e) {
             throw new MyRaftException("logModule writeLog error!",e);
         }
@@ -115,5 +128,19 @@ public class LogModule {
 
         // 找遍了整个文件，也没找到，返回null
         return null;
+    }
+
+    /**
+     * 用于单元测试
+     * */
+    public void clean() throws IOException {
+        System.out.println("log module clean!");
+        this.logFile.delete();
+        this.logMetaDataFile.writeLong(0);
+    }
+
+    private void refreshMetadata() throws IOException {
+        this.logMetaDataFile.seek(0);
+        this.logMetaDataFile.writeLong(this.currentOffset);
     }
 }

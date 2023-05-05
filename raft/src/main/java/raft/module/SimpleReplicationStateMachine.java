@@ -5,7 +5,7 @@ import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
-import raft.util.FileUtil;
+import raft.util.RaftFileUtil;
 
 import java.io.File;
 import java.util.HashMap;
@@ -24,7 +24,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     public SimpleReplicationStateMachine(File persistenceFile) {
         this.persistenceFile = persistenceFile;
 
-        String fileContent = FileUtil.getFileContent(persistenceFile);
+        String fileContent = RaftFileUtil.getFileContent(persistenceFile);
         if(StringUtils.hasText(fileContent)){
             kvMap = JsonUtil.json2Obj(fileContent,new TypeReference<Map<String,String>>(){});
         }else{
@@ -37,7 +37,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
         kvMap.put(setCommand.getKey(),setCommand.getValue());
 
         // 每次写操作完都持久化一遍(简单起见，暂时不考虑性能问题)
-        FileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
+        RaftFileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
     }
 
     @Override

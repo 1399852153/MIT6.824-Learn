@@ -6,18 +6,17 @@ import raft.api.command.SetCommand;
 import raft.api.model.LogEntry;
 
 import java.io.File;
+import java.io.IOException;
 
 public class LogModuleTest {
 
     @Test
     public void test() throws Exception {
-        String path = System.getProperty("user.dir") + File.separator + "testLogModule.txt";
-        File logFile = new File(path);
+        int serverId = 99999;
+        LogModule logModule = new LogModule(serverId);
+        logModule.clean();
 
-        logFile.delete();
-        logFile.createNewFile();
-
-        LogModule logModule = new LogModule(logFile);
+        logModule = new LogModule(serverId);
         {
             LogEntry logEntry = logModule.readLog(1);
             Assert.assertNull(logEntry);
@@ -51,6 +50,6 @@ public class LogModuleTest {
             Assert.assertEquals(logEntry2.getLogTerm(),1);
         }
 
-        logFile.delete();
+        logModule.clean();
     }
 }

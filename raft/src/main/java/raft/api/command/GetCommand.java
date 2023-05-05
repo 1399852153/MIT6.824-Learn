@@ -14,4 +14,11 @@ public class GetCommand implements Command{
     public String getKey() {
         return key;
     }
+
+    @Override
+    public String toString() {
+        return "GetCommand{" +
+            "key='" + key + '\'' +
+            '}';
+    }
 }

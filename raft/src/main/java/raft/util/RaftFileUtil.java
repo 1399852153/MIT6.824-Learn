@@ -6,7 +6,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-public class FileUtil {
+public class RaftFileUtil {
 
     /**
      * 基于文件名，读取整个文件 (不考虑大文件内存不够的问题)
@@ -24,6 +24,16 @@ public class FileUtil {
             return byteArrayOutputStream.toString(StandardCharsets.UTF_8.name());
         } catch (IOException e) {
             throw new MyRaftException("FileUtil.getFileContent error",e);
+        }
+    }
+
+    public static void createFile(File file){
+        if(!file.exists()){
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                throw new MyRaftException("createNewFile error!" + file);
+            }
         }
     }
 

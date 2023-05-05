@@ -23,5 +23,13 @@ public class SetCommand implements Command{
     public String getValue() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "SetCommand{" +
+            "key='" + key + '\'' +
+            ", value='" + value + '\'' +
+            '}';
+    }
 }
 

@@ -15,7 +15,7 @@ public class LogEntry {
     /**
      * 日志的索引编号
      * */
-    private int logIndex;
+    private long logIndex;
 
     /**
      * 具体作用在状态机上的指令
@@ -30,11 +30,11 @@ public class LogEntry {
         this.logTerm = logTerm;
     }
 
-    public int getLogIndex() {
+    public long getLogIndex() {
         return logIndex;
     }
 
-    public void setLogIndex(int logIndex) {
+    public void setLogIndex(long logIndex) {
         this.logIndex = logIndex;
     }
 

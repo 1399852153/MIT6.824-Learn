@@ -13,6 +13,7 @@ import raft.module.LogModule;
 import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -75,7 +76,12 @@ public class RaftServer implements RaftService {
 
         raftLeaderElectionModule = new RaftLeaderElectionModule(this);
         raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
-//        logModule = new LogModule();
+
+        try {
+            logModule = new LogModule(this.serverId);
+        } catch (IOException e) {
+            throw new MyRaftException("init LogModule error!",e);
+        }
 
         logger.info("raft server init end! otherNodeInCluster={}, currentServerId={}",otherNodeInCluster,serverId);
     }
@@ -120,7 +126,19 @@ public class RaftServer implements RaftService {
             return clientRequestResult;
         }
 
-        // 自己是leader，处理客户端的请求
+        // 自己是leader，需要处理客户端的请求
+
+        // 构造新的日志条目
+        LogEntry newLogEntry = new LogEntry();
+        newLogEntry.setLogTerm(this.currentTerm);
+        newLogEntry.setLogIndex(this.logModule.getLastIndex() + 1);
+        newLogEntry.setCommand(clientRequestParam.getCommand());
+
+        // 预写入日志
+        logModule.writeLog(newLogEntry);
+        logModule.setLastIndex(newLogEntry.getLogIndex());
+
+
 
         return null;
     }
@@ -223,7 +241,7 @@ public class RaftServer implements RaftService {
      * Current terms are exchanged whenever servers communicate;
      * if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
      * */
-    public void processCommunicationHigherTerm(int rpcOtherTerm){
+    public synchronized void processCommunicationHigherTerm(int rpcOtherTerm){
         if(rpcOtherTerm > this.getCurrentTerm()) {
             this.setCurrentTerm(rpcOtherTerm);
             this.setServerStatusEnum(ServerStatusEnum.FOLLOWER);

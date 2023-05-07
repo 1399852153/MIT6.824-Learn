@@ -92,18 +92,13 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                 futureList.add(future);
             }
 
-            List<RequestVoteRpcResult> requestVoteRpcResultList = new ArrayList<>(otherNodeInCluster.size());
-            for(int i=0; i<futureList.size(); i++){
-                Future<RequestVoteRpcResult> future = futureList.get(i);
-                try {
-                    RequestVoteRpcResult rpcResult = future.get(1,TimeUnit.SECONDS);
-                    requestVoteRpcResultList.add(rpcResult);
+            List<RequestVoteRpcResult> requestVoteRpcResultList = CommonUtil.concurrentGetRpcFutureResult(
+                    "requestVote", futureList,
+                    raftLeaderElectionModule.getRpcThreadPool(),1,TimeUnit.SECONDS);
 
-                    currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
-                } catch (Exception e) {
-                    logger.info("requestVote rpc error! ignore futureIndex={}",i,e);
-                    // rpc异常，认为投票失败，忽略之
-                }
+            for(RequestVoteRpcResult rpcResult : requestVoteRpcResultList){
+                // 收到更高任期的处理
+                currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
             }
 
             // 获得rpc响应中决定投票给自己的总票数

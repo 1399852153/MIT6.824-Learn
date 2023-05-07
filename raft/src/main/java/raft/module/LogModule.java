@@ -22,9 +22,13 @@ public class LogModule {
     private long currentOffset;
 
     /**
-     * 已提交的
+     * 已写入的当前日志索引号
      * */
     private long lastIndex;
+
+    /**
+     * 已提交的最大日志索引号
+     * */
     private long lastCommittedIndex;
 
     public LogModule(int serverId) throws IOException {
@@ -43,6 +47,24 @@ public class LogModule {
         }else{
             this.currentOffset = 0;
         }
+
+        try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"r")) {
+            // 尝试读取之前已有的日志文件，找到最后一条日志的index
+            if (this.currentOffset >= LONG_SIZE) {
+                // 跳转到最后一个记录的offset处
+                randomAccessFile.seek(this.currentOffset - LONG_SIZE);
+
+                // 获得记录的offset
+                long entryOffset = randomAccessFile.readLong();
+                // 跳转至对应位置
+                randomAccessFile.seek(entryOffset);
+
+                this.lastIndex = randomAccessFile.readInt();
+            }else{
+                // 之前的日志为空，lastIndex初始化为0
+                this.lastIndex = 0;
+            }
+        }
     }
 
     /**
@@ -53,7 +75,7 @@ public class LogModule {
             // 追加写入
             randomAccessFile.seek(logFile.length());
 
-            randomAccessFile.writeInt(logEntry.getLogIndex());
+            randomAccessFile.writeLong(logEntry.getLogIndex());
             randomAccessFile.writeInt(logEntry.getLogTerm());
 
             byte[] commandBytes = JsonUtil.obj2Str(logEntry.getCommand()).getBytes(StandardCharsets.UTF_8);
@@ -91,23 +113,10 @@ public class LogModule {
                 // 跳转至对应位置
                 randomAccessFile.seek(entryOffset);
 
-                int targetLogIndex = randomAccessFile.readInt();
+                long targetLogIndex = randomAccessFile.readLong();
                 if(targetLogIndex == logIndex){
                     // 找到了
-
-                    LogEntry logEntry = new LogEntry();
-                    logEntry.setLogIndex(logIndex);
-                    logEntry.setLogTerm(randomAccessFile.readInt());
-
-                    int commandLength = randomAccessFile.readInt();
-                    byte[] commandBytes = new byte[commandLength];
-                    randomAccessFile.read(commandBytes);
-
-                    String jsonStr = new String(commandBytes,StandardCharsets.UTF_8);
-                    Command command = JsonUtil.json2Obj(jsonStr, Command.class);
-                    logEntry.setCommand(command);
-
-                    return logEntry;
+                    return readLog(randomAccessFile,logIndex);
                 }else{
                     // 没找到
 
@@ -130,6 +139,27 @@ public class LogModule {
         return null;
     }
 
+    public long getLastIndex() {
+        return lastIndex;
+    }
+
+    public void setLastIndex(long lastIndex) {
+        this.lastIndex = lastIndex;
+    }
+
+    public long getLastCommittedIndex() {
+        return lastCommittedIndex;
+    }
+
+    public void setLastCommittedIndex(long lastCommittedIndex) {
+        if(lastCommittedIndex < this.lastCommittedIndex){
+            throw new MyRaftException("set lastCommittedIndex error this.lastCommittedIndex=" + this.lastCommittedIndex
+                    + " lastCommittedIndex=" + lastCommittedIndex);
+        }
+
+        this.lastCommittedIndex = lastCommittedIndex;
+    }
+
     /**
      * 用于单元测试
      * */
@@ -137,6 +167,22 @@ public class LogModule {
         System.out.println("log module clean!");
         this.logFile.delete();
         this.logMetaDataFile.writeLong(0);
+    }
+
+    private LogEntry readLog(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
+        LogEntry logEntry = new LogEntry();
+        logEntry.setLogIndex(logIndex);
+        logEntry.setLogTerm(randomAccessFile.readInt());
+
+        int commandLength = randomAccessFile.readInt();
+        byte[] commandBytes = new byte[commandLength];
+        randomAccessFile.read(commandBytes);
+
+        String jsonStr = new String(commandBytes,StandardCharsets.UTF_8);
+        Command command = JsonUtil.json2Obj(jsonStr, Command.class);
+        logEntry.setCommand(command);
+
+        return logEntry;
     }
 
     private void refreshMetadata() throws IOException {

@@ -8,6 +8,7 @@ import raft.api.model.AppendEntriesRpcResult;
 import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftHeartBeatBroadcastModule;
+import raft.util.CommonUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,14 +62,11 @@ public class HeartBeatBroadcastTask implements Runnable{
             futureList.add(future);
         }
 
-        for(Future<AppendEntriesRpcResult> future : futureList){
-            try {
-                AppendEntriesRpcResult rpcResult = future.get(1, TimeUnit.SECONDS);
-                currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
-            } catch (Exception e) {
-                // 心跳rpc异常，忽略之
-                logger.info("do heartBeat broadcast error!",e);
-            }
+        List<AppendEntriesRpcResult> futureResultList = CommonUtil.concurrentGetRpcFutureResult(
+                "heartBeatBroadcast", futureList,
+                raftHeartBeatBroadcastModule.getRpcThreadPool(),1,TimeUnit.SECONDS);
+        for(AppendEntriesRpcResult rpcResult : futureResultList){
+            currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
         }
 
         processAutoFail();

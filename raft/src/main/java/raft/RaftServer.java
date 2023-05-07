@@ -78,7 +78,7 @@ public class RaftServer implements RaftService {
         raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
 
         try {
-            logModule = new LogModule(this.serverId);
+            logModule = new LogModule(this);
         } catch (IOException e) {
             throw new MyRaftException("init LogModule error!",e);
         }

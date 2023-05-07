@@ -2,21 +2,26 @@ package raft.module;
 
 import org.junit.Assert;
 import org.junit.Test;
+import raft.RaftServer;
 import raft.api.command.SetCommand;
 import raft.api.model.LogEntry;
+import raft.common.config.RaftConfig;
+import raft.common.config.RaftNodeConfig;
 
-import java.io.File;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class LogModuleTest {
 
     @Test
     public void test() throws Exception {
         int serverId = 99999;
-        LogModule logModule = new LogModule(serverId);
+        RaftNodeConfig raftNodeConfig = new RaftNodeConfig(serverId);
+        RaftServer raftServer = new RaftServer(new RaftConfig(raftNodeConfig, Arrays.asList(raftNodeConfig)));
+        LogModule logModule = new LogModule(raftServer);
         logModule.clean();
 
-        logModule = new LogModule(serverId);
+        logModule = new LogModule(raftServer);
         {
             LogEntry logEntry = logModule.readLog(1);
             Assert.assertNull(logEntry);

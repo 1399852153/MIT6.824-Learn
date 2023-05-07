@@ -1,6 +1,7 @@
 package raft.module;
 
 import myrpc.serialize.json.JsonUtil;
+import raft.RaftServer;
 import raft.api.command.Command;
 import raft.api.model.LogEntry;
 import raft.exception.MyRaftException;
@@ -31,7 +32,12 @@ public class LogModule {
      * */
     private long lastCommittedIndex;
 
-    public LogModule(int serverId) throws IOException {
+    private final RaftServer currentServer;
+
+    public LogModule(RaftServer currentServer) throws IOException {
+        this.currentServer = currentServer;
+
+        int serverId = currentServer.getServerId();
         String userPath = System.getProperty("user.dir");
 
         this.logFile = new File(userPath + File.separator + "raftLog" + serverId + ".txt");

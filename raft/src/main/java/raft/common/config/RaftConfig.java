@@ -22,7 +22,7 @@ public class RaftConfig {
      * */
     private final List<RaftNodeConfig> raftNodeConfigList;
 
-    private final int majorityNum;
+    private int majorityNum;
 
     /**
      * 选举超时时间 单位:秒

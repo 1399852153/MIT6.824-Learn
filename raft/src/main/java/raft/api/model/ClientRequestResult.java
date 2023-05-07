@@ -14,6 +14,11 @@ public class ClientRequestResult {
      * */
     private URLAddress leaderAddress;
 
+    /**
+     * 响应是否成功
+     * */
+    private boolean success;
+
     public String getValue() {
         return value;
     }
@@ -28,5 +33,13 @@ public class ClientRequestResult {
 
     public void setLeaderAddress(URLAddress leaderAddress) {
         this.leaderAddress = leaderAddress;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
     }
 }

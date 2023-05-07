@@ -3,6 +3,8 @@ package raft;
 import myrpc.common.URLAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import raft.api.command.GetCommand;
+import raft.api.command.SetCommand;
 import raft.api.model.*;
 import raft.common.config.RaftConfig;
 import raft.common.config.RaftNodeConfig;
@@ -12,9 +14,11 @@ import raft.exception.MyRaftException;
 import raft.module.LogModule;
 import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
+import raft.module.SimpleReplicationStateMachine;
+import raft.module.api.KVReplicationStateMachine;
+import raft.util.CommonUtil;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 public class RaftServer implements RaftService {
@@ -60,6 +64,7 @@ public class RaftServer implements RaftService {
     private LogModule logModule;
     private RaftLeaderElectionModule raftLeaderElectionModule;
     private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
+    private KVReplicationStateMachine kvReplicationStateMachine;
 
     public RaftServer(RaftConfig raftConfig) {
         this.serverId = raftConfig.getServerId();
@@ -76,6 +81,7 @@ public class RaftServer implements RaftService {
 
         raftLeaderElectionModule = new RaftLeaderElectionModule(this);
         raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
+        kvReplicationStateMachine = new SimpleReplicationStateMachine(this.getServerId());
 
         try {
             logModule = new LogModule(this);
@@ -111,6 +117,7 @@ public class RaftServer implements RaftService {
 
     @Override
     public synchronized ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
+        // 不是leader
         if(this.serverStatusEnum != ServerStatusEnum.LEADER){
             if(this.currentLeader == null){
                 // 自己不是leader，也不知道谁是leader直接报错
@@ -126,7 +133,20 @@ public class RaftServer implements RaftService {
             return clientRequestResult;
         }
 
-        // 自己是leader，需要处理客户端的请求
+        // 是leader，处理读请求
+        if(clientRequestParam.getCommand() instanceof GetCommand){
+            GetCommand getCommand = (GetCommand) clientRequestParam.getCommand();
+
+            // 直接从状态机中读取就行
+            String value = this.kvReplicationStateMachine.get(getCommand.getKey());
+
+            ClientRequestResult clientRequestResult = new ClientRequestResult();
+            clientRequestResult.setSuccess(true);
+            clientRequestResult.setValue(value);
+            return clientRequestResult;
+        }
+
+        // 自己是leader，需要处理客户端的写请求
 
         // 构造新的日志条目
         LogEntry newLogEntry = new LogEntry();
@@ -135,12 +155,33 @@ public class RaftServer implements RaftService {
         newLogEntry.setCommand(clientRequestParam.getCommand());
 
         // 预写入日志
-        logModule.writeLog(newLogEntry);
+        logModule.writeLocalLog(newLogEntry);
         logModule.setLastIndex(newLogEntry.getLogIndex());
 
+        List<AppendEntriesRpcResult> appendEntriesRpcResultList = logModule.replicationLogEntry(newLogEntry);
 
+        // +1算上自己
+        long successNum = appendEntriesRpcResultList.stream().filter(AppendEntriesRpcResult::isSuccess).count() + 1;
+        if(successNum >= this.raftConfig.getMajorityNum()){
+            // 成功复制到多数节点
 
-        return null;
+            // 设置最新的已提交索引编号
+            logModule.setLastCommittedIndex(newLogEntry.getLogIndex());
+            // 作用到状态机上
+            this.kvReplicationStateMachine.apply((SetCommand) newLogEntry.getCommand());
+
+            // 返回成功
+            ClientRequestResult clientRequestResult = new ClientRequestResult();
+            clientRequestResult.setSuccess(true);
+
+            return clientRequestResult;
+        }else{
+            // 没有成功复制到多数,返回失败
+            ClientRequestResult clientRequestResult = new ClientRequestResult();
+            clientRequestResult.setSuccess(false);
+
+            return clientRequestResult;
+        }
     }
 
     private AppendEntriesRpcResult doAppendEntries(AppendEntriesRpcParam appendEntriesRpcParam){

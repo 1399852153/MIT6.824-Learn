@@ -12,11 +12,6 @@ public class CommonUtil {
 
     private static Logger logger = LoggerFactory.getLogger(CommonUtil.class);
 
-    public static boolean hasMajorVoted(int getVoted, int totalNodeCount){
-        int majorCount = totalNodeCount/2+1;
-        return getVoted >= majorCount;
-    }
-
     /**
      * 并发的获得future列表的结果
      * */

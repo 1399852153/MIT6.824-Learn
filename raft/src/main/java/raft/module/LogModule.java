@@ -3,12 +3,20 @@ package raft.module;
 import myrpc.serialize.json.JsonUtil;
 import raft.RaftServer;
 import raft.api.command.Command;
-import raft.api.model.LogEntry;
+import raft.api.model.*;
+import raft.api.service.RaftService;
 import raft.exception.MyRaftException;
+import raft.util.CommonUtil;
 import raft.util.RaftFileUtil;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class LogModule {
 
@@ -32,12 +40,17 @@ public class LogModule {
      * */
     private long lastCommittedIndex;
 
+    private final ExecutorService rpcThreadPool;
+
     private final RaftServer currentServer;
 
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
 
         int serverId = currentServer.getServerId();
+
+        this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2);
+
         String userPath = System.getProperty("user.dir");
 
         this.logFile = new File(userPath + File.separator + "raftLog" + serverId + ".txt");
@@ -76,7 +89,7 @@ public class LogModule {
     /**
      * 按照顺序追加写入日志
      * */
-    public synchronized void writeLog(LogEntry logEntry){
+    public void writeLocalLog(LogEntry logEntry){
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"rw")){
             // 追加写入
             randomAccessFile.seek(logFile.length());
@@ -102,7 +115,7 @@ public class LogModule {
     /**
      * 根据日志索引号，获得对应的日志记录
      * */
-    public LogEntry readLog(int logIndex) {
+    public LogEntry readLocalLog(int logIndex) {
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -122,7 +135,7 @@ public class LogModule {
                 long targetLogIndex = randomAccessFile.readLong();
                 if(targetLogIndex == logIndex){
                     // 找到了
-                    return readLog(randomAccessFile,logIndex);
+                    return readLocalLog(randomAccessFile,logIndex);
                 }else{
                     // 没找到
 
@@ -144,6 +157,59 @@ public class LogModule {
         // 找遍了整个文件，也没找到，返回null
         return null;
     }
+
+    /**
+     * 向集群广播，令follower复制新的日志条目
+     * */
+    public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry logEntry) {
+        AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
+        appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
+        appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
+
+        List<LogEntry> logEntryList = new ArrayList<>();
+        logEntryList.add(logEntry);
+        appendEntriesRpcParam.setEntries(logEntryList);
+        appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
+
+        // 读取最后一条日志
+        LogEntry lastLogEntry = readLocalLog(this.currentOffset);
+        if(lastLogEntry == null){
+            throw new MyRaftException("replicationLogEntry not have entry!");
+        }
+
+        appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
+        appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
+
+        List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
+
+        List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
+
+        for(RaftService node : otherNodeInCluster){
+            // 并行发送rpc，要求follower复制日志
+            Future<AppendEntriesRpcResult> future = this.rpcThreadPool.submit(()->{
+
+                // todo 如果任期不对等异常情况，额外的处理
+                return node.appendEntries(appendEntriesRpcParam);
+            });
+
+            futureList.add(future);
+        }
+
+        // 获得结果
+        List<AppendEntriesRpcResult> appendEntriesRpcResultList = CommonUtil.concurrentGetRpcFutureResult(
+                "do appendEntries", futureList,
+                this.rpcThreadPool,1, TimeUnit.SECONDS);
+
+        for(AppendEntriesRpcResult rpcResult : appendEntriesRpcResultList){
+            // 收到更高任期的处理
+            currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
+        }
+
+        return appendEntriesRpcResultList;
+    }
+
+
+    // ============================= get/set ========================================
 
     public long getLastIndex() {
         return lastIndex;
@@ -175,7 +241,24 @@ public class LogModule {
         this.logMetaDataFile.writeLong(0);
     }
 
-    private LogEntry readLog(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
+    private LogEntry readLocalLog(long offset){
+        try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
+            if(offset >= LONG_SIZE) {
+                // 跳转到记录的offset处
+                randomAccessFile.seek(offset - LONG_SIZE);
+
+                long logIndex = randomAccessFile.readLong();
+
+                return readLocalLog(randomAccessFile,logIndex);
+            }else{
+                return null;
+            }
+        } catch (IOException e) {
+            throw new MyRaftException("readLocalLog error!",e);
+        }
+    }
+
+    private LogEntry readLocalLog(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
         LogEntry logEntry = new LogEntry();
         logEntry.setLogIndex(logIndex);
         logEntry.setLogTerm(randomAccessFile.readInt());

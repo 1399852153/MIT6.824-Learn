@@ -76,7 +76,6 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
 
             // 并行的发送请求投票的rpc给集群中的其它节点
             List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
-            logger.info("otherNodeInCluster.size={}",otherNodeInCluster.size());
             List<Future<RequestVoteRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
 
             // 构造请求参数
@@ -105,9 +104,8 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             int getRpcVoted = (int) requestVoteRpcResultList.stream().filter(RequestVoteRpcResult::isVoteGranted).count();
             logger.info("HeartBeatTimeoutCheck election, getRpcVoted={}, currentServerId={}",getRpcVoted,currentServer.getServerId());
 
-            // getVoted = 其它节点的票数加自己1票
-            // totalNodeCount = 集群中总节点数
-            boolean majorVoted = CommonUtil.hasMajorVoted(getRpcVoted+1,otherNodeInCluster.size()+1);
+            // 是否获得大多数的投票
+            boolean majorVoted = getRpcVoted >= this.currentServer.getRaftConfig().getMajorityNum();
             if(majorVoted){
                 logger.info("HeartBeatTimeoutCheck election result: become a leader! {}",currentServer.getServerId());
 

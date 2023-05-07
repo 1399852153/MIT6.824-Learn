@@ -3,11 +3,13 @@ package raft.module;
 import com.fasterxml.jackson.core.type.TypeReference;
 import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
+import raft.RaftServer;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
 import raft.util.RaftFileUtil;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,8 +23,10 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
 
     private final File persistenceFile;
 
-    public SimpleReplicationStateMachine(File persistenceFile) {
-        this.persistenceFile = persistenceFile;
+    public SimpleReplicationStateMachine(int serverId) {
+        String userPath = System.getProperty("user.dir");
+
+        this.persistenceFile = new File(userPath + File.separator + "raftReplicationStateMachine" + serverId + ".txt");
 
         String fileContent = RaftFileUtil.getFileContent(persistenceFile);
         if(StringUtils.hasText(fileContent)){
@@ -43,5 +47,13 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     @Override
     public synchronized String get(String key) {
         return kvMap.get(key);
+    }
+
+    /**
+     * 用于单元测试
+     * */
+    public void clean() {
+        System.out.println("SimpleReplicationStateMachine clean!");
+        this.persistenceFile.delete();
     }
 }

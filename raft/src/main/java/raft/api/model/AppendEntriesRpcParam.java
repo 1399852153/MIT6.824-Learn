@@ -22,7 +22,7 @@ public class AppendEntriesRpcParam {
      *
      * index of log entry immediately preceding new ones
      * */
-    private int prevLogIndex;
+    private long prevLogIndex;
 
     /**
      * prevLogIndex对应日志条目的任期值
@@ -41,7 +41,7 @@ public class AppendEntriesRpcParam {
      *
      * leader’s commitIndex
      * */
-    private int leaderCommit;
+    private long leaderCommit;
 
     public int getTerm() {
         return term;
@@ -59,11 +59,11 @@ public class AppendEntriesRpcParam {
         this.leaderId = leaderId;
     }
 
-    public int getPrevLogIndex() {
+    public long getPrevLogIndex() {
         return prevLogIndex;
     }
 
-    public void setPrevLogIndex(int prevLogIndex) {
+    public void setPrevLogIndex(long prevLogIndex) {
         this.prevLogIndex = prevLogIndex;
     }
 
@@ -83,11 +83,11 @@ public class AppendEntriesRpcParam {
         this.entries = entries;
     }
 
-    public int getLeaderCommit() {
+    public long getLeaderCommit() {
         return leaderCommit;
     }
 
-    public void setLeaderCommit(int leaderCommit) {
+    public void setLeaderCommit(long leaderCommit) {
         this.leaderCommit = leaderCommit;
     }
 }

@@ -4,20 +4,14 @@ import org.junit.Assert;
 import org.junit.Test;
 import raft.api.command.SetCommand;
 
-import java.io.File;
-import java.io.IOException;
-
 public class KVReplicationStateMachineTest {
 
     @Test
-    public void TestSimpleReplicationStateMachine() throws IOException {
-        String path = System.getProperty("user.dir") + File.separator + "testSimpleReplicationStateMachine.txt";
-        File file = new File(path);
-        file.delete();
-        file.createNewFile();
+    public void TestSimpleReplicationStateMachine() {
+        int serverId = 8888;
 
         {
-            SimpleReplicationStateMachine simpleReplicationStateMachine = new SimpleReplicationStateMachine(file);
+            SimpleReplicationStateMachine simpleReplicationStateMachine = new SimpleReplicationStateMachine(serverId);
 
             Assert.assertNull(simpleReplicationStateMachine.get("k1"));
             simpleReplicationStateMachine.apply(new SetCommand("k1", "v1"));
@@ -28,13 +22,14 @@ public class KVReplicationStateMachineTest {
         }
 
         {
-            SimpleReplicationStateMachine simpleReplicationStateMachine = new SimpleReplicationStateMachine(file);
+            SimpleReplicationStateMachine simpleReplicationStateMachine = new SimpleReplicationStateMachine(serverId);
 
             Assert.assertEquals("v1", simpleReplicationStateMachine.get("k1"));
             Assert.assertEquals("v2", simpleReplicationStateMachine.get("k2"));
             Assert.assertNull(simpleReplicationStateMachine.get("kn"));
         }
 
-        file.delete();
+        SimpleReplicationStateMachine simpleReplicationStateMachine = new SimpleReplicationStateMachine(serverId);
+        simpleReplicationStateMachine.clean();
     }
 }

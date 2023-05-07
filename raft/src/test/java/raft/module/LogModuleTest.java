@@ -8,7 +8,6 @@ import raft.api.model.LogEntry;
 import raft.common.config.RaftConfig;
 import raft.common.config.RaftNodeConfig;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 
 public class LogModuleTest {
@@ -23,7 +22,7 @@ public class LogModuleTest {
 
         logModule = new LogModule(raftServer);
         {
-            LogEntry logEntry = logModule.readLog(1);
+            LogEntry logEntry = logModule.readLocalLog(1);
             Assert.assertNull(logEntry);
         }
 
@@ -32,9 +31,9 @@ public class LogModuleTest {
             newLogEntry.setLogIndex(1);
             newLogEntry.setLogTerm(1);
             newLogEntry.setCommand(new SetCommand("k1","v1"));
-            logModule.writeLog(newLogEntry);
+            logModule.writeLocalLog(newLogEntry);
 
-            LogEntry logEntry = logModule.readLog(1);
+            LogEntry logEntry = logModule.readLocalLog(1);
             Assert.assertEquals(logEntry.getLogIndex(),1);
             Assert.assertEquals(logEntry.getLogTerm(),1);
         }
@@ -44,13 +43,13 @@ public class LogModuleTest {
             newLogEntry.setLogIndex(2);
             newLogEntry.setLogTerm(1);
             newLogEntry.setCommand(new SetCommand("k1","v2"));
-            logModule.writeLog(newLogEntry);
+            logModule.writeLocalLog(newLogEntry);
 
-            LogEntry logEntry = logModule.readLog(2);
+            LogEntry logEntry = logModule.readLocalLog(2);
             Assert.assertEquals(logEntry.getLogIndex(),2);
             Assert.assertEquals(logEntry.getLogTerm(),1);
 
-            LogEntry logEntry2 = logModule.readLog(1);
+            LogEntry logEntry2 = logModule.readLocalLog(1);
             Assert.assertEquals(logEntry2.getLogIndex(),1);
             Assert.assertEquals(logEntry2.getLogTerm(),1);
         }

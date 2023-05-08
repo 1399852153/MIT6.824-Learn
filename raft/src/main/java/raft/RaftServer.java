@@ -16,7 +16,6 @@ import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
 import raft.module.SimpleReplicationStateMachine;
 import raft.module.api.KVReplicationStateMachine;
-import raft.util.CommonUtil;
 
 import java.io.IOException;
 import java.util.List;
@@ -151,6 +150,7 @@ public class RaftServer implements RaftService {
         // 构造新的日志条目
         LogEntry newLogEntry = new LogEntry();
         newLogEntry.setLogTerm(this.currentTerm);
+        // 新日志的索引号为当前最大索引编号+1
         newLogEntry.setLogIndex(this.logModule.getLastIndex() + 1);
         newLogEntry.setCommand(clientRequestParam.getCommand());
 
@@ -160,7 +160,7 @@ public class RaftServer implements RaftService {
 
         List<AppendEntriesRpcResult> appendEntriesRpcResultList = logModule.replicationLogEntry(newLogEntry);
 
-        // +1算上自己
+        // successNum需要加上自己的1票
         long successNum = appendEntriesRpcResultList.stream().filter(AppendEntriesRpcResult::isSuccess).count() + 1;
         if(successNum >= this.raftConfig.getMajorityNum()){
             // 成功复制到多数节点
@@ -169,6 +169,8 @@ public class RaftServer implements RaftService {
             logModule.setLastCommittedIndex(newLogEntry.getLogIndex());
             // 作用到状态机上
             this.kvReplicationStateMachine.apply((SetCommand) newLogEntry.getCommand());
+            // todo lastApplied为什么不需要持久化？ 状态机指令的应用和更新lastApplied非原子性会产生什么问题？
+            logModule.setLastApplied(newLogEntry.getLogIndex());
 
             // 返回成功
             ClientRequestResult clientRequestResult = new ClientRequestResult();
@@ -179,6 +181,10 @@ public class RaftServer implements RaftService {
             // 没有成功复制到多数,返回失败
             ClientRequestResult clientRequestResult = new ClientRequestResult();
             clientRequestResult.setSuccess(false);
+
+            // 删掉之前预写入的日志条目
+            // 思考一下如果删除完成之前，宕机了有问题吗？ 个人感觉是ok的
+            logModule.deleteLocalLog(newLogEntry.getLogIndex());
 
             return clientRequestResult;
         }
@@ -198,6 +204,13 @@ public class RaftServer implements RaftService {
             this.currentTerm = appendEntriesRpcParam.getTerm();
         }
 
+        // 简单起见，先只考虑一次rpc仅单个entry的场景
+        LogEntry newLogEntry = appendEntriesRpcParam.getEntries().get(0);
+        if(appendEntriesRpcParam.getLeaderCommit() > logModule.getLastCommittedIndex()){
+            // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+            this.logModule.setLastCommittedIndex(Math.min(appendEntriesRpcParam.getLeaderCommit(), newLogEntry.getLogIndex()));
+        }
+
         if(appendEntriesRpcParam.getEntries() == null){
             // 来自leader的心跳处理，清理掉之前选举的votedFor
             this.cleanVotedFor();
@@ -208,8 +221,54 @@ public class RaftServer implements RaftService {
             return new AppendEntriesRpcResult(this.currentTerm,true);
         }
 
-        // todo
-        return null;
+        // logEntries不为空，是真实的日志复制rpc
+
+        // AppendEntry可靠性校验，如果prevLogIndex和prevLogTerm不匹配，则需要返回false，让leader发更早的日志过来
+        {
+            LogEntry localLogEntry = logModule.readLocalLog(appendEntriesRpcParam.getPrevLogIndex());
+            if (localLogEntry == null || localLogEntry.getLogTerm() == appendEntriesRpcParam.getPrevLogTerm()) {
+                //  Reply false if log doesn’t contain an entry at prevLogIndex
+                //  whose term matches prevLogTerm (§5.3)
+                //  本地日志和参数中的PrevLogIndex和PrevLogTerm对不上(对应日志不存在，或者任期对不上)
+                return new AppendEntriesRpcResult(this.currentTerm, false);
+            }
+        }
+
+        // 新日志的复制操作
+        {
+            LogEntry localLogEntry = logModule.readLocalLog(newLogEntry.getLogIndex());
+            if(localLogEntry == null){
+                // 本地日志不存在，追加写入
+                // Append any new entries not already in the log
+                logModule.writeLocalLog(newLogEntry);
+                logModule.setLastIndex(newLogEntry.getLogIndex());
+
+                // 返回成功
+                return new AppendEntriesRpcResult(this.currentTerm, true);
+            }else{
+                if(localLogEntry.getLogTerm() == newLogEntry.getLogTerm()){
+                    logger.info("local log existed and term match. return success");
+                    // 本地日志存在，且任期一致,幂等返回成功
+                    return new AppendEntriesRpcResult(this.currentTerm, true);
+                }else{
+                    logger.info("local log existed but term conflict. delete conflict log");
+
+                    // 本地日志存在，但任期不一致
+                    // If an existing entry conflicts with a new one (same index
+                    // but different terms), delete the existing entry and all that
+                    // follow it (§5.3)
+
+                    // 先删除index以及以后有冲突的日志条目
+                    logModule.deleteLocalLog(newLogEntry.getLogIndex());
+                    // 然后再写入新的日志
+                    logModule.writeLocalLog(newLogEntry);
+                    logModule.setLastIndex(newLogEntry.getLogIndex());
+
+                    // 返回成功
+                    return new AppendEntriesRpcResult(this.currentTerm, true);
+                }
+            }
+        }
     }
 
     // ================================= get/set ============================================

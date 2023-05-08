@@ -36,9 +36,15 @@ public class LogModule {
     private long lastIndex;
 
     /**
-     * 已提交的最大日志索引号
+     * 已提交的最大日志索引号（论文中的commitIndex）
+     * rpc复制到多数节点上，日志就认为是已提交
      * */
     private long lastCommittedIndex;
+
+    /**
+     * 作用到状态机上，日志就认为是已应用
+     * */
+    private long lastApplied;
 
     private final ExecutorService rpcThreadPool;
 
@@ -115,7 +121,7 @@ public class LogModule {
     /**
      * 根据日志索引号，获得对应的日志记录
      * */
-    public LogEntry readLocalLog(int logIndex) {
+    public LogEntry readLocalLog(long logIndex) {
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -125,7 +131,6 @@ public class LogModule {
                 randomAccessFile.seek(offset - LONG_SIZE);
             }
 
-            // 循环找，直到找到为止
             while (offset > 0) {
                 // 获得记录的offset
                 long entryOffset = randomAccessFile.readLong();
@@ -133,9 +138,14 @@ public class LogModule {
                 randomAccessFile.seek(entryOffset);
 
                 long targetLogIndex = randomAccessFile.readLong();
+                if(targetLogIndex < logIndex){
+                    // 从下向上找到的顺序，如果已经小于参数指定的了，说明日志里根本就没有需要的日志条目，直接返回null
+                    return null;
+                }
+
                 if(targetLogIndex == logIndex){
                     // 找到了
-                    return readLocalLog(randomAccessFile,logIndex);
+                    return readLocalLogByOffset(randomAccessFile,logIndex);
                 }else{
                     // 没找到
 
@@ -159,6 +169,62 @@ public class LogModule {
     }
 
     /**
+     * 删除包括logIndex以及更大序号的所有日志
+     * */
+    public void deleteLocalLog(long logIndexNeedDelete){
+        // 已经确认提交的日志不能删除
+        if(logIndexNeedDelete <= this.lastCommittedIndex){
+            throw new MyRaftException("can not delete committed log! " +
+                "logIndexNeedDelete=" + logIndexNeedDelete + ",lastCommittedIndex=" + this.lastIndex);
+        }
+
+        try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
+            // 从后往前找
+            long offset = this.currentOffset;
+
+            if(offset >= LONG_SIZE) {
+                // 跳转到最后一个记录的offset处
+                randomAccessFile.seek(offset - LONG_SIZE);
+            }
+
+            while (offset > 0) {
+                // 获得记录的offset
+                long entryOffset = randomAccessFile.readLong();
+                // 跳转至对应位置
+                randomAccessFile.seek(entryOffset);
+
+                long targetLogIndex = randomAccessFile.readLong();
+                if(targetLogIndex < logIndexNeedDelete){
+                    // 从下向上找到的顺序，如果已经小于参数指定的了，说明日志里根本就没有需要删除的日志条目，直接返回
+                    return;
+                }
+
+                // 找到了对应的日志条目
+                if(targetLogIndex == logIndexNeedDelete){
+                    // 把文件的偏移量刷新一下就行(相当于逻辑删除这条日志以及之后的entry)
+                    this.currentOffset = entryOffset;
+                    refreshMetadata();
+                    return;
+                }else{
+                    // 没找到
+
+                    // 跳过当前日志的剩余部分，继续向上找
+                    randomAccessFile.readInt();
+                    int commandLength = randomAccessFile.readInt();
+                    randomAccessFile.read(new byte[commandLength]);
+
+                    // preLogOffset
+                    offset = randomAccessFile.readLong();
+                    // 跳转到记录的offset处
+                    randomAccessFile.seek(offset - LONG_SIZE);
+                }
+            }
+        } catch (IOException e) {
+            throw new MyRaftException("logModule deleteLog error!",e);
+        }
+    }
+
+    /**
      * 向集群广播，令follower复制新的日志条目
      * */
     public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry logEntry) {
@@ -172,7 +238,7 @@ public class LogModule {
         appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
 
         // 读取最后一条日志
-        LogEntry lastLogEntry = readLocalLog(this.currentOffset);
+        LogEntry lastLogEntry = readLocalLogByOffset(this.currentOffset);
         if(lastLogEntry == null){
             throw new MyRaftException("replicationLogEntry not have entry!");
         }
@@ -232,6 +298,19 @@ public class LogModule {
         this.lastCommittedIndex = lastCommittedIndex;
     }
 
+    public long getLastApplied() {
+        return lastApplied;
+    }
+
+    public void setLastApplied(long lastApplied) {
+        if(lastApplied < this.lastApplied){
+            throw new MyRaftException("set lastApplied error this.lastApplied=" + this.lastApplied
+                + " lastApplied=" + lastApplied);
+        }
+
+        this.lastApplied = lastApplied;
+    }
+
     /**
      * 用于单元测试
      * */
@@ -241,7 +320,7 @@ public class LogModule {
         this.logMetaDataFile.writeLong(0);
     }
 
-    private LogEntry readLocalLog(long offset){
+    private LogEntry readLocalLogByOffset(long offset){
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             if(offset >= LONG_SIZE) {
                 // 跳转到记录的offset处
@@ -249,7 +328,7 @@ public class LogModule {
 
                 long logIndex = randomAccessFile.readLong();
 
-                return readLocalLog(randomAccessFile,logIndex);
+                return readLocalLogByOffset(randomAccessFile,logIndex);
             }else{
                 return null;
             }
@@ -258,7 +337,7 @@ public class LogModule {
         }
     }
 
-    private LogEntry readLocalLog(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
+    private LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
         LogEntry logEntry = new LogEntry();
         logEntry.setLogIndex(logIndex);
         logEntry.setLogTerm(randomAccessFile.readInt());

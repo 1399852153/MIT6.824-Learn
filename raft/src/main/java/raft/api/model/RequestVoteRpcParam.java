@@ -18,7 +18,7 @@ public class RequestVoteRpcParam {
     /**
      * 候选人最新日志的索引编号
      * */
-    private int lastLogIndex;
+    private long lastLogIndex;
 
     /**
      * 候选人最新日志对应的任期编号
@@ -41,11 +41,11 @@ public class RequestVoteRpcParam {
         this.candidateId = candidateId;
     }
 
-    public int getLastLogIndex() {
+    public long getLastLogIndex() {
         return lastLogIndex;
     }
 
-    public void setLastLogIndex(int lastLogIndex) {
+    public void setLastLogIndex(long lastLogIndex) {
         this.lastLogIndex = lastLogIndex;
     }
 

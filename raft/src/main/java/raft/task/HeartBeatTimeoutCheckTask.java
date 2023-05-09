@@ -3,6 +3,7 @@ package raft.task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
+import raft.api.model.LogEntry;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 import raft.api.service.RaftService;
@@ -82,11 +83,20 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             RequestVoteRpcParam requestVoteRpcParam = new RequestVoteRpcParam();
             requestVoteRpcParam.setTerm(currentServer.getCurrentTerm());
             requestVoteRpcParam.setCandidateId(currentServer.getServerId());
+
+            LogEntry lastLogEntry = currentServer.getLogModule().getLastLogEntry();
+            if(lastLogEntry != null){
+                requestVoteRpcParam.setLastLogTerm(lastLogEntry.getLogTerm());
+                requestVoteRpcParam.setLastLogIndex(lastLogEntry.getLogIndex());
+            }else{
+                requestVoteRpcParam.setLastLogTerm(0);
+                requestVoteRpcParam.setLastLogIndex(0);
+            }
+
             for(RaftService node : otherNodeInCluster){
-                Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(()->{
-                    // todo 日志复制相关的先不考虑
-                    return node.requestVote(requestVoteRpcParam);
-                });
+                Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(
+                    ()-> node.requestVote(requestVoteRpcParam)
+                );
 
                 futureList.add(future);
             }

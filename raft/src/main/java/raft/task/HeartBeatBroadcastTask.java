@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.model.AppendEntriesRpcParam;
 import raft.api.model.AppendEntriesRpcResult;
+import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftHeartBeatBroadcastModule;
@@ -53,11 +54,21 @@ public class HeartBeatBroadcastTask implements Runnable{
         appendEntriesRpcParam.setEntries(null);
         appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
         appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
+
+        LogEntry lastLogEntry = currentServer.getLogModule().getLastLogEntry();
+        if(lastLogEntry != null){
+            appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
+            appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
+        }else{
+            appendEntriesRpcParam.setPrevLogTerm(0);
+            appendEntriesRpcParam.setPrevLogIndex(0);
+        }
+        appendEntriesRpcParam.setLeaderCommit(currentServer.getLogModule().getLastCommittedIndex());
+
         for(RaftService node : otherNodeInCluster){
-            Future<AppendEntriesRpcResult> future = raftHeartBeatBroadcastModule.getRpcThreadPool().submit(()->{
-                // todo 日志复制相关的先不考虑
-                return node.appendEntries(appendEntriesRpcParam);
-            });
+            Future<AppendEntriesRpcResult> future = raftHeartBeatBroadcastModule.getRpcThreadPool().submit(
+                ()-> node.appendEntries(appendEntriesRpcParam)
+            );
 
             futureList.add(future);
         }

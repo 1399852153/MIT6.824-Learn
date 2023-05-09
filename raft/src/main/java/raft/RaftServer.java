@@ -325,6 +325,10 @@ public class RaftServer implements RaftService {
         return raftLeaderElectionModule;
     }
 
+    public LogModule getLogModule() {
+        return logModule;
+    }
+
     // ============================= public的业务接口 =================================
 
     /**

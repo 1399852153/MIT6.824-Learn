@@ -28,7 +28,7 @@ public class LogModule {
     /**
      * 每条记录后面都带上这个，用于找到
      * */
-    private long currentOffset;
+    private volatile long currentOffset;
 
     /**
      * 已写入的当前日志索引号
@@ -238,7 +238,7 @@ public class LogModule {
         appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
 
         // 读取最后一条日志
-        LogEntry lastLogEntry = readLocalLogByOffset(this.currentOffset);
+        LogEntry lastLogEntry = getLastLogEntry();
         if(lastLogEntry == null){
             throw new MyRaftException("replicationLogEntry not have entry!");
         }
@@ -274,6 +274,9 @@ public class LogModule {
         return appendEntriesRpcResultList;
     }
 
+    public LogEntry getLastLogEntry(){
+        return readLocalLogByOffset(this.currentOffset);
+    }
 
     // ============================= get/set ========================================
 

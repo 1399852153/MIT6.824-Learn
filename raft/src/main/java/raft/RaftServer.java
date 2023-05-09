@@ -204,13 +204,6 @@ public class RaftServer implements RaftService {
             this.currentTerm = appendEntriesRpcParam.getTerm();
         }
 
-        // 简单起见，先只考虑一次rpc仅单个entry的场景
-        LogEntry newLogEntry = appendEntriesRpcParam.getEntries().get(0);
-        if(appendEntriesRpcParam.getLeaderCommit() > logModule.getLastCommittedIndex()){
-            // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-            this.logModule.setLastCommittedIndex(Math.min(appendEntriesRpcParam.getLeaderCommit(), newLogEntry.getLogIndex()));
-        }
-
         if(appendEntriesRpcParam.getEntries() == null){
             // 来自leader的心跳处理，清理掉之前选举的votedFor
             this.cleanVotedFor();
@@ -232,6 +225,30 @@ public class RaftServer implements RaftService {
                 //  本地日志和参数中的PrevLogIndex和PrevLogTerm对不上(对应日志不存在，或者任期对不上)
                 return new AppendEntriesRpcResult(this.currentTerm, false);
             }
+        }
+
+        // 简单起见，先只考虑一次rpc仅单个entry的场景
+        LogEntry newLogEntry = appendEntriesRpcParam.getEntries().get(0);
+        if(appendEntriesRpcParam.getLeaderCommit() > logModule.getLastCommittedIndex()){
+            // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+            // 如果leaderCommit更大，说明当前节点的同步进度慢于leader，以新的entry里的index为准(更高的index还没有在本地保存(因为上面的appendEntry有效性检查))
+            // 如果index of last new entry更大，说明当前节点的同步进度是和leader相匹配的，commitIndex以leader最新提交的为准
+            long lastCommittedIndex = Math.min(appendEntriesRpcParam.getLeaderCommit(), newLogEntry.getLogIndex());
+            long lastApplied = logModule.getLastApplied();
+
+            if(lastApplied < lastCommittedIndex){
+                // 作用在状态机上的日志编号低于集群中已提交的日志编号，需要把这些已提交的日志都作用到状态机上去
+
+                // 全读取出来(读取出来是按照index从小到大排好序的)
+                List<LogEntry> logEntryList = logModule.readLocalLog(lastApplied+1,lastCommittedIndex);
+                for(LogEntry logEntry : logEntryList){
+                    // 按照顺序依次作用到状态机中
+                    this.kvReplicationStateMachine.apply((SetCommand) logEntry.getCommand());
+                }
+            }
+
+            this.logModule.setLastCommittedIndex(lastCommittedIndex);
+            this.logModule.setLastApplied(lastCommittedIndex);
         }
 
         // 新日志的复制操作

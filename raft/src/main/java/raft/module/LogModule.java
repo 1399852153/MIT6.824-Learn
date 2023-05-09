@@ -12,6 +12,8 @@ import raft.util.RaftFileUtil;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,6 +25,7 @@ public class LogModule {
     private static final int LONG_SIZE = 8;
 
     private final File logFile;
+    private final File logMetaDataFileOriginal;
     private final RandomAccessFile logMetaDataFile;
 
     /**
@@ -65,6 +68,7 @@ public class LogModule {
         File logMetaDataFile = new File(userPath + File.separator + "raftLogMeta" + serverId + ".txt");
         RaftFileUtil.createFile(logMetaDataFile);
 
+        this.logMetaDataFileOriginal = logMetaDataFile;
         this.logMetaDataFile = new RandomAccessFile(logMetaDataFile,"rw");
 
         if(this.logMetaDataFile.length() >= LONG_SIZE){
@@ -122,6 +126,40 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * */
     public LogEntry readLocalLog(long logIndex) {
+        List<LogEntry> logEntryList = readLocalLogNoSort(logIndex,logIndex);
+        if(logEntryList.isEmpty()){
+            return null;
+        }else{
+            // 只会有1个
+            return logEntryList.get(0);
+        }
+    }
+
+    /**
+     * 根据日志索引号，获得对应的日志记录
+     * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
+     * */
+    public List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
+        // 读取出来的时候是index从大到小排列的
+        List<LogEntry> logEntryList = readLocalLogNoSort(logIndexStart,logIndexEnd);
+
+        // 翻转一下，令其按index从小到大排列
+        Collections.reverse(logEntryList);
+
+        return logEntryList;
+    }
+
+    /**
+     * 根据日志索引号，获得对应的日志记录
+     * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
+     * */
+    private List<LogEntry> readLocalLogNoSort(long logIndexStart, long logIndexEnd) {
+        if(logIndexStart > logIndexEnd){
+            throw new MyRaftException("readLocalLog logIndexStart > logIndexEnd! " +
+                "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
+        }
+
+        List<LogEntry> logEntryList = new ArrayList<>();
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -138,34 +176,39 @@ public class LogModule {
                 randomAccessFile.seek(entryOffset);
 
                 long targetLogIndex = randomAccessFile.readLong();
-                if(targetLogIndex < logIndex){
+                if(targetLogIndex < logIndexStart){
                     // 从下向上找到的顺序，如果已经小于参数指定的了，说明日志里根本就没有需要的日志条目，直接返回null
-                    return null;
+                    return logEntryList;
                 }
 
-                if(targetLogIndex == logIndex){
-                    // 找到了
-                    return readLocalLogByOffset(randomAccessFile,logIndex);
+                if(targetLogIndex <= logIndexEnd){
+                    // 找到的符合要求
+                    logEntryList.add(readLocalLogByOffset(randomAccessFile,targetLogIndex));
                 }else{
-                    // 没找到
+                    // 不符合要求
 
                     // 跳过一些
                     randomAccessFile.readInt();
                     int commandLength = randomAccessFile.readInt();
                     randomAccessFile.read(new byte[commandLength]);
-
-                    // preLogOffset
-                    offset = randomAccessFile.readLong();
-                    // 跳转到记录的offset处
-                    randomAccessFile.seek(offset - LONG_SIZE);
                 }
+
+                // preLogOffset
+                offset = randomAccessFile.readLong();
+                if(offset < LONG_SIZE){
+                    // 整个文件都读完了
+                    return logEntryList;
+                }
+
+                // 跳转到记录的offset处
+                randomAccessFile.seek(offset - LONG_SIZE);
             }
         } catch (IOException e) {
             throw new MyRaftException("logModule readLog error!",e);
         }
 
         // 找遍了整个文件，也没找到，返回null
-        return null;
+        return logEntryList;
     }
 
     /**
@@ -320,7 +363,8 @@ public class LogModule {
     public void clean() throws IOException {
         System.out.println("log module clean!");
         this.logFile.delete();
-        this.logMetaDataFile.writeLong(0);
+        this.logMetaDataFile.close();
+        this.logMetaDataFileOriginal.delete();
     }
 
     private LogEntry readLocalLogByOffset(long offset){

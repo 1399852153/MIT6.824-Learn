@@ -95,7 +95,12 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
 
             for(RaftService node : otherNodeInCluster){
                 Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(
-                    ()-> node.requestVote(requestVoteRpcParam)
+                    ()-> {
+                        RequestVoteRpcResult rpcResult = node.requestVote(requestVoteRpcParam);
+                        // 收到更高任期的处理
+                        currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
+                        return rpcResult;
+                    }
                 );
 
                 futureList.add(future);
@@ -104,11 +109,6 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             List<RequestVoteRpcResult> requestVoteRpcResultList = CommonUtil.concurrentGetRpcFutureResult(
                     "requestVote", futureList,
                     raftLeaderElectionModule.getRpcThreadPool(),1,TimeUnit.SECONDS);
-
-            for(RequestVoteRpcResult rpcResult : requestVoteRpcResultList){
-                // 收到更高任期的处理
-                currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
-            }
 
             // 获得rpc响应中决定投票给自己的总票数
             int getRpcVoted = (int) requestVoteRpcResultList.stream().filter(RequestVoteRpcResult::isVoteGranted).count();
@@ -119,7 +119,11 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             if(majorVoted){
                 logger.info("HeartBeatTimeoutCheck election result: become a leader! {}",currentServer.getServerId());
 
-                // 投票成功，成为leader
+                // 票数过半成功当选为leader
+
+                // 成为leader之后需要进行的一些操作
+                processWhenBecomeLeader();
+
                 currentServer.setServerStatusEnum(ServerStatusEnum.LEADER);
                 currentServer.setCurrentLeader(currentServer.getServerId());
             }else{
@@ -134,5 +138,24 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
         }
 
         logger.info("do HeartBeatTimeoutCheck end {}",currentServer.getServerId());
+    }
+
+    /**
+     * 成为leader之后需要进行的一些操作
+     * */
+    private void processWhenBecomeLeader(){
+        // 成为leader后立马发送一次心跳,抑制其它节点发起新的一轮选举
+        // Upon election: send initial empty AppendEntries RPCs (heartbeat) to each server;
+        // repeat during idle periods to prevent election timeouts (§5.2)
+        HeartBeatBroadcastTask.doHeartBeatBroadcast(currentServer);
+
+        long lastIndex = currentServer.getLogModule().getLastIndex();
+        for(RaftService otherService : currentServer.getOtherNodeInCluster()){
+            // for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+            this.currentServer.getNextIndexMap().put(otherService,lastIndex+1);
+
+            // for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+            this.currentServer.getMatchIndexMap().put(otherService,0L);
+        }
     }
 }

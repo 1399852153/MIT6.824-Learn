@@ -296,9 +296,14 @@ public class LogModule {
         for(RaftService node : otherNodeInCluster){
             // 并行发送rpc，要求follower复制日志
             Future<AppendEntriesRpcResult> future = this.rpcThreadPool.submit(()->{
+                AppendEntriesRpcResult appendEntriesRpcResult = node.appendEntries(appendEntriesRpcParam);
+                // 收到更高任期的处理
+                currentServer.processCommunicationHigherTerm(appendEntriesRpcResult.getTerm());
+
+
 
                 // todo 如果任期不对等异常情况，额外的处理
-                return node.appendEntries(appendEntriesRpcParam);
+                return appendEntriesRpcResult;
             });
 
             futureList.add(future);
@@ -308,11 +313,6 @@ public class LogModule {
         List<AppendEntriesRpcResult> appendEntriesRpcResultList = CommonUtil.concurrentGetRpcFutureResult(
                 "do appendEntries", futureList,
                 this.rpcThreadPool,1, TimeUnit.SECONDS);
-
-        for(AppendEntriesRpcResult rpcResult : appendEntriesRpcResultList){
-            // 收到更高任期的处理
-            currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
-        }
 
         return appendEntriesRpcResultList;
     }

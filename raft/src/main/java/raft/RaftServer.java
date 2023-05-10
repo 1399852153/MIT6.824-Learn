@@ -18,7 +18,9 @@ import raft.module.SimpleReplicationStateMachine;
 import raft.module.api.KVReplicationStateMachine;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class RaftServer implements RaftService {
 
@@ -64,6 +66,16 @@ public class RaftServer implements RaftService {
     private RaftLeaderElectionModule raftLeaderElectionModule;
     private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
     private KVReplicationStateMachine kvReplicationStateMachine;
+
+    /**
+     * nextIndex[]
+     * */
+    private final Map<RaftService,Long> nextIndexMap = new HashMap<>();
+
+    /**
+     * matchIndex[]
+     * */
+    private final Map<RaftService,Long> matchIndexMap = new HashMap<>();
 
     public RaftServer(RaftConfig raftConfig) {
         this.serverId = raftConfig.getServerId();
@@ -163,6 +175,8 @@ public class RaftServer implements RaftService {
         // successNum需要加上自己的1票
         long successNum = appendEntriesRpcResultList.stream().filter(AppendEntriesRpcResult::isSuccess).count() + 1;
         if(successNum >= this.raftConfig.getMajorityNum()){
+            // If command received from client: append entry to local log, respond after entry applied to state machine (§5.3)
+
             // 成功复制到多数节点
 
             // 设置最新的已提交索引编号
@@ -229,13 +243,49 @@ public class RaftServer implements RaftService {
 
         // 简单起见，先只考虑一次rpc仅单个entry的场景
         LogEntry newLogEntry = appendEntriesRpcParam.getEntries().get(0);
+
+        AppendEntriesRpcResult appendEntriesRpcResult;
+        // 新日志的复制操作
+        LogEntry localLogEntry = logModule.readLocalLog(newLogEntry.getLogIndex());
+        if(localLogEntry == null){
+            // 本地日志不存在，追加写入
+            // Append any new entries not already in the log
+            logModule.writeLocalLog(newLogEntry);
+            logModule.setLastIndex(newLogEntry.getLogIndex());
+
+            appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+        }else{
+            if(localLogEntry.getLogTerm() == newLogEntry.getLogTerm()){
+                logger.info("local log existed and term match. return success");
+                // 本地日志存在，且任期一致,幂等返回成功
+                appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+            }else{
+                logger.info("local log existed but term conflict. delete conflict log");
+
+                // 本地日志存在，但任期不一致
+                // If an existing entry conflicts with a new one (same index
+                // but different terms), delete the existing entry and all that
+                // follow it (§5.3)
+
+                // 先删除index以及以后有冲突的日志条目
+                logModule.deleteLocalLog(newLogEntry.getLogIndex());
+                // 然后再写入新的日志
+                logModule.writeLocalLog(newLogEntry);
+                logModule.setLastIndex(newLogEntry.getLogIndex());
+
+                // 返回成功
+                appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+            }
+        }
+
+        // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
         if(appendEntriesRpcParam.getLeaderCommit() > logModule.getLastCommittedIndex()){
-            // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
             // 如果leaderCommit更大，说明当前节点的同步进度慢于leader，以新的entry里的index为准(更高的index还没有在本地保存(因为上面的appendEntry有效性检查))
             // 如果index of last new entry更大，说明当前节点的同步进度是和leader相匹配的，commitIndex以leader最新提交的为准
             long lastCommittedIndex = Math.min(appendEntriesRpcParam.getLeaderCommit(), newLogEntry.getLogIndex());
             long lastApplied = logModule.getLastApplied();
 
+            // If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
             if(lastApplied < lastCommittedIndex){
                 // 作用在状态机上的日志编号低于集群中已提交的日志编号，需要把这些已提交的日志都作用到状态机上去
 
@@ -251,41 +301,7 @@ public class RaftServer implements RaftService {
             this.logModule.setLastApplied(lastCommittedIndex);
         }
 
-        // 新日志的复制操作
-        {
-            LogEntry localLogEntry = logModule.readLocalLog(newLogEntry.getLogIndex());
-            if(localLogEntry == null){
-                // 本地日志不存在，追加写入
-                // Append any new entries not already in the log
-                logModule.writeLocalLog(newLogEntry);
-                logModule.setLastIndex(newLogEntry.getLogIndex());
-
-                // 返回成功
-                return new AppendEntriesRpcResult(this.currentTerm, true);
-            }else{
-                if(localLogEntry.getLogTerm() == newLogEntry.getLogTerm()){
-                    logger.info("local log existed and term match. return success");
-                    // 本地日志存在，且任期一致,幂等返回成功
-                    return new AppendEntriesRpcResult(this.currentTerm, true);
-                }else{
-                    logger.info("local log existed but term conflict. delete conflict log");
-
-                    // 本地日志存在，但任期不一致
-                    // If an existing entry conflicts with a new one (same index
-                    // but different terms), delete the existing entry and all that
-                    // follow it (§5.3)
-
-                    // 先删除index以及以后有冲突的日志条目
-                    logModule.deleteLocalLog(newLogEntry.getLogIndex());
-                    // 然后再写入新的日志
-                    logModule.writeLocalLog(newLogEntry);
-                    logModule.setLastIndex(newLogEntry.getLogIndex());
-
-                    // 返回成功
-                    return new AppendEntriesRpcResult(this.currentTerm, true);
-                }
-            }
-        }
+        return appendEntriesRpcResult;
     }
 
     // ================================= get/set ============================================
@@ -342,8 +358,20 @@ public class RaftServer implements RaftService {
         return raftLeaderElectionModule;
     }
 
+    public RaftHeartBeatBroadcastModule getRaftHeartBeatBroadcastModule() {
+        return raftHeartBeatBroadcastModule;
+    }
+
     public LogModule getLogModule() {
         return logModule;
+    }
+
+    public Map<RaftService, Long> getNextIndexMap() {
+        return nextIndexMap;
+    }
+
+    public Map<RaftService, Long> getMatchIndexMap() {
+        return matchIndexMap;
     }
 
     // ============================= public的业务接口 =================================
@@ -363,6 +391,8 @@ public class RaftServer implements RaftService {
      * if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
      * */
     public synchronized void processCommunicationHigherTerm(int rpcOtherTerm){
+        // If RPC request or response contains term T > currentTerm:
+        // set currentTerm = T, convert to follower (§5.1)
         if(rpcOtherTerm > this.getCurrentTerm()) {
             this.setCurrentTerm(rpcOtherTerm);
             this.setServerStatusEnum(ServerStatusEnum.FOLLOWER);

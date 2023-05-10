@@ -9,12 +9,10 @@ import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftHeartBeatBroadcastModule;
-import raft.util.CommonUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 /**
  * leader心跳广播任务
@@ -40,10 +38,19 @@ public class HeartBeatBroadcastTask implements Runnable{
             return;
         }
 
+        // 心跳广播
+        doHeartBeatBroadcast(currentServer);
+
+        processAutoFail();
+
+        logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
+    }
+
+    public static void doHeartBeatBroadcast(RaftServer currentServer){
         logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
 
         // 先刷新自己的心跳时间
-        this.currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
+        currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
 
         // 并行的发送心跳rpc给集群中的其它节点
         List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
@@ -66,23 +73,16 @@ public class HeartBeatBroadcastTask implements Runnable{
         appendEntriesRpcParam.setLeaderCommit(currentServer.getLogModule().getLastCommittedIndex());
 
         for(RaftService node : otherNodeInCluster){
-            Future<AppendEntriesRpcResult> future = raftHeartBeatBroadcastModule.getRpcThreadPool().submit(
-                ()-> node.appendEntries(appendEntriesRpcParam)
+            Future<AppendEntriesRpcResult> future = currentServer.getRaftHeartBeatBroadcastModule().getRpcThreadPool().submit(
+                ()-> {
+                    AppendEntriesRpcResult rpcResult = node.appendEntries(appendEntriesRpcParam);
+                    currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
+                    return rpcResult;
+                }
             );
 
             futureList.add(future);
         }
-
-        List<AppendEntriesRpcResult> futureResultList = CommonUtil.concurrentGetRpcFutureResult(
-                "heartBeatBroadcast", futureList,
-                raftHeartBeatBroadcastModule.getRpcThreadPool(),1,TimeUnit.SECONDS);
-        for(AppendEntriesRpcResult rpcResult : futureResultList){
-            currentServer.processCommunicationHigherTerm(rpcResult.getTerm());
-        }
-
-        processAutoFail();
-
-        logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
     }
 
     /**

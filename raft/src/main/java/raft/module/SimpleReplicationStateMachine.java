@@ -24,7 +24,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     private final File persistenceFile;
 
     public SimpleReplicationStateMachine(int serverId) {
-        String userPath = System.getProperty("user.dir");
+        String userPath = System.getProperty("user.dir") + File.separator + "#" + serverId;
 
         this.persistenceFile = new File(userPath + File.separator + "raftReplicationStateMachine" + serverId + ".txt");
 

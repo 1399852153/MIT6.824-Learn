@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RaftServer implements RaftService {
 
@@ -233,7 +234,14 @@ public class RaftServer implements RaftService {
         // AppendEntry可靠性校验，如果prevLogIndex和prevLogTerm不匹配，则需要返回false，让leader发更早的日志过来
         {
             LogEntry localLogEntry = logModule.readLocalLog(appendEntriesRpcParam.getPrevLogIndex());
-            if (localLogEntry == null || localLogEntry.getLogTerm() == appendEntriesRpcParam.getPrevLogTerm()) {
+            if(localLogEntry == null){
+                // 当前节点日志条目为空(默认任期为-1，这个是约定)
+                localLogEntry = new LogEntry();
+                localLogEntry.setLogIndex(-1);
+                localLogEntry.setLogTerm(-1);
+            }
+
+            if (localLogEntry.getLogTerm() == appendEntriesRpcParam.getPrevLogTerm()) {
                 //  Reply false if log doesn’t contain an entry at prevLogIndex
                 //  whose term matches prevLogTerm (§5.3)
                 //  本地日志和参数中的PrevLogIndex和PrevLogTerm对不上(对应日志不存在，或者任期对不上)
@@ -389,13 +397,19 @@ public class RaftServer implements RaftService {
      *
      * Current terms are exchanged whenever servers communicate;
      * if one server’s current term is smaller than the other’s, then it updates its current term to the larger value.
+     *
+     * @return 是否转换为了follower
      * */
-    public synchronized void processCommunicationHigherTerm(int rpcOtherTerm){
+    public synchronized boolean processCommunicationHigherTerm(int rpcOtherTerm){
         // If RPC request or response contains term T > currentTerm:
         // set currentTerm = T, convert to follower (§5.1)
         if(rpcOtherTerm > this.getCurrentTerm()) {
             this.setCurrentTerm(rpcOtherTerm);
             this.setServerStatusEnum(ServerStatusEnum.FOLLOWER);
+
+            return true;
+        }else{
+            return false;
         }
     }
 }

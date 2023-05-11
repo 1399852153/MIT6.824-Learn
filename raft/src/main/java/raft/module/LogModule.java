@@ -11,10 +11,7 @@ import raft.util.RaftFileUtil;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -36,18 +33,18 @@ public class LogModule {
     /**
      * 已写入的当前日志索引号
      * */
-    private long lastIndex;
+    private volatile long lastIndex;
 
     /**
      * 已提交的最大日志索引号（论文中的commitIndex）
      * rpc复制到多数节点上，日志就认为是已提交
      * */
-    private long lastCommittedIndex;
+    private volatile long lastCommittedIndex;
 
     /**
      * 作用到状态机上，日志就认为是已应用
      * */
-    private long lastApplied;
+    private volatile long lastApplied;
 
     private final ExecutorService rpcThreadPool;
 
@@ -60,7 +57,7 @@ public class LogModule {
 
         this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2);
 
-        String userPath = System.getProperty("user.dir");
+        String userPath = System.getProperty("user.dir") + File.separator + "#" + serverId;
 
         this.logFile = new File(userPath + File.separator + "raftLog" + serverId + ".txt");
         RaftFileUtil.createFile(logFile);
@@ -159,7 +156,8 @@ public class LogModule {
                 "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
         }
 
-        List<LogEntry> logEntryList = new ArrayList<>();
+        // 链表效率高一点
+        List<LogEntry> logEntryList = new LinkedList<>();
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -270,25 +268,7 @@ public class LogModule {
     /**
      * 向集群广播，令follower复制新的日志条目
      * */
-    public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry logEntry) {
-        AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
-        appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
-        appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
-
-        List<LogEntry> logEntryList = new ArrayList<>();
-        logEntryList.add(logEntry);
-        appendEntriesRpcParam.setEntries(logEntryList);
-        appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
-
-        // 读取最后一条日志
-        LogEntry lastLogEntry = getLastLogEntry();
-        if(lastLogEntry == null){
-            throw new MyRaftException("replicationLogEntry not have entry!");
-        }
-
-        appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
-        appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
-
+    public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry lastEntry) {
         List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
 
         List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
@@ -296,14 +276,67 @@ public class LogModule {
         for(RaftService node : otherNodeInCluster){
             // 并行发送rpc，要求follower复制日志
             Future<AppendEntriesRpcResult> future = this.rpcThreadPool.submit(()->{
-                AppendEntriesRpcResult appendEntriesRpcResult = node.appendEntries(appendEntriesRpcParam);
-                // 收到更高任期的处理
-                currentServer.processCommunicationHigherTerm(appendEntriesRpcResult.getTerm());
+                long nextIndex = this.currentServer.getNextIndexMap().get(node);
 
+                AppendEntriesRpcResult finallyResult = null;
 
+                // If last log index ≥ nextIndex for a follower: send AppendEntries RPC with log entries starting at nextIndex
+                while(lastEntry.getLogIndex() >= nextIndex){
+                    AppendEntriesRpcParam appendEntriesRpcParam = new AppendEntriesRpcParam();
+                    appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
+                    appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
+                    appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
 
-                // todo 如果任期不对等异常情况，额外的处理
-                return appendEntriesRpcResult;
+                    // nextIndex至少为1，所以不必担心-1会找不到日志记录
+                    List<LogEntry> logEntryList = this.readLocalLog(nextIndex-1,nextIndex);
+                    if(logEntryList.size() == 2){
+                        LogEntry preLogEntry = logEntryList.get(0);
+
+                        appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(1)));
+                        appendEntriesRpcParam.setPrevLogIndex(preLogEntry.getLogIndex());
+                        appendEntriesRpcParam.setPrevLogTerm(preLogEntry.getLogTerm());
+                    }else if(logEntryList.size() == 1){
+                        // 日志长度为1,说明是第一条日志记录
+                        logEntryList.add(logEntryList.get(0));
+                        appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
+                        // 第一条记录的prev的index和term都是-1
+                        appendEntriesRpcParam.setPrevLogIndex(-1);
+                        appendEntriesRpcParam.setPrevLogTerm(-1);
+                    }else{
+                        // 日志长度不是1也不是2，日志模块有bug
+                        throw new MyRaftException("replicationLogEntry logEntryList size error!" + logEntryList.size());
+                    }
+
+                    AppendEntriesRpcResult appendEntriesRpcResult = node.appendEntries(appendEntriesRpcParam);
+                    finallyResult = appendEntriesRpcResult;
+                    // 收到更高任期的处理
+                    boolean beFollower = currentServer.processCommunicationHigherTerm(appendEntriesRpcResult.getTerm());
+                    if(beFollower){
+                        return appendEntriesRpcResult;
+                    }
+
+                    if(appendEntriesRpcResult.isSuccess()){
+                        // 同步成功了，nextIndex递增一位
+
+                        // If successful: update nextIndex and matchIndex for follower (§5.3)
+                        nextIndex++;
+                        this.currentServer.getNextIndexMap().put(node,nextIndex);
+                        this.currentServer.getMatchIndexMap().put(node,nextIndex);
+                    }else{
+                        // 因为日志对不上导致一致性检查没通过，同步没成功，nextIndex往后退一位
+
+                        // If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
+                        nextIndex--;
+                        this.currentServer.getNextIndexMap().put(node,nextIndex);
+                    }
+                }
+
+                if(finallyResult == null){
+                    // 有bug
+                    throw new MyRaftException("replicationLogEntry finallyResult is null!");
+                }
+
+                return finallyResult;
             });
 
             futureList.add(future);

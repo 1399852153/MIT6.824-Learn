@@ -38,7 +38,8 @@ public class RaftRpcConsumer implements RaftService {
     public AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
         // 强制指定rpc目标的ip/port
         setTargetProviderUrl();
-        return raftServiceProxy.appendEntries(appendEntriesRpcParam);
+        AppendEntriesRpcResult result = raftServiceProxy.appendEntries(appendEntriesRpcParam);
+        return result;
     }
 
     @Override

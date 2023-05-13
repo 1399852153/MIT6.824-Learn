@@ -6,7 +6,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-public class RaftFileUtil {
+public class MyRaftFileUtil {
 
     /**
      * 基于文件名，读取整个文件 (不考虑大文件内存不够的问题)
@@ -28,12 +28,16 @@ public class RaftFileUtil {
     }
 
     public static void createFile(File file){
-        if(!file.exists()){
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                throw new MyRaftException("createNewFile error!" + file);
-            }
+        if(file.exists()){
+            return;
+        }
+
+        file.getParentFile().mkdirs();
+
+        try {
+            file.createNewFile();
+        } catch (IOException e) {
+            throw new MyRaftException("createNewFile error!" + file,e);
         }
     }
 

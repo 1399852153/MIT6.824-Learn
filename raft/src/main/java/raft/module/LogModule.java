@@ -7,7 +7,7 @@ import raft.api.model.*;
 import raft.api.service.RaftService;
 import raft.exception.MyRaftException;
 import raft.util.CommonUtil;
-import raft.util.RaftFileUtil;
+import raft.util.MyRaftFileUtil;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -57,13 +57,13 @@ public class LogModule {
 
         this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2);
 
-        String userPath = System.getProperty("user.dir") + File.separator + "#" + serverId;
+        String userPath = System.getProperty("user.dir") + File.separator + serverId;
 
-        this.logFile = new File(userPath + File.separator + "raftLog" + serverId + ".txt");
-        RaftFileUtil.createFile(logFile);
+        this.logFile = new File(userPath + File.separator + "raftLog.txt");
+        MyRaftFileUtil.createFile(logFile);
 
         File logMetaDataFile = new File(userPath + File.separator + "raftLogMeta" + serverId + ".txt");
-        RaftFileUtil.createFile(logMetaDataFile);
+        MyRaftFileUtil.createFile(logMetaDataFile);
 
         this.logMetaDataFileOriginal = logMetaDataFile;
         this.logMetaDataFile = new RandomAccessFile(logMetaDataFile,"rw");

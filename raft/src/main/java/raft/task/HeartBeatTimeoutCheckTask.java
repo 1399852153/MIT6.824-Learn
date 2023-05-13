@@ -89,8 +89,8 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                 requestVoteRpcParam.setLastLogTerm(lastLogEntry.getLogTerm());
                 requestVoteRpcParam.setLastLogIndex(lastLogEntry.getLogIndex());
             }else{
-                requestVoteRpcParam.setLastLogTerm(0);
-                requestVoteRpcParam.setLastLogIndex(0);
+                requestVoteRpcParam.setLastLogTerm(-1);
+                requestVoteRpcParam.setLastLogIndex(-1);
             }
 
             for(RaftService node : otherNodeInCluster){
@@ -110,8 +110,8 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                     "requestVote", futureList,
                     raftLeaderElectionModule.getRpcThreadPool(),1,TimeUnit.SECONDS);
 
-            // 获得rpc响应中决定投票给自己的总票数
-            int getRpcVoted = (int) requestVoteRpcResultList.stream().filter(RequestVoteRpcResult::isVoteGranted).count();
+            // 获得rpc响应中决定投票给自己的总票数（算上自己的1票）
+            int getRpcVoted = (int) requestVoteRpcResultList.stream().filter(RequestVoteRpcResult::isVoteGranted).count()+1;
             logger.info("HeartBeatTimeoutCheck election, getRpcVoted={}, currentServerId={}",getRpcVoted,currentServer.getServerId());
 
             // 是否获得大多数的投票

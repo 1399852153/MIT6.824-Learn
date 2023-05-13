@@ -91,21 +91,21 @@ public class RaftServer implements RaftService {
         // 集群中的其它节点服务
         this.otherNodeInCluster = otherNodeInCluster;
 
-        raftLeaderElectionModule = new RaftLeaderElectionModule(this);
-        raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
-        kvReplicationStateMachine = new SimpleReplicationStateMachine(this.getServerId());
-
         try {
             logModule = new LogModule(this);
         } catch (IOException e) {
             throw new MyRaftException("init LogModule error!",e);
         }
 
+        raftLeaderElectionModule = new RaftLeaderElectionModule(this);
+        raftHeartBeatBroadcastModule = new RaftHeartBeatBroadcastModule(this);
+        kvReplicationStateMachine = new SimpleReplicationStateMachine(this.getServerId());
+
         logger.info("raft server init end! otherNodeInCluster={}, currentServerId={}",otherNodeInCluster,serverId);
     }
 
     @Override
-    public RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
+    public synchronized RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
         RequestVoteRpcResult requestVoteRpcResult = raftLeaderElectionModule.requestVoteProcess(requestVoteRpcParam);
 
         processCommunicationHigherTerm(requestVoteRpcParam.getTerm());
@@ -117,7 +117,7 @@ public class RaftServer implements RaftService {
     }
 
     @Override
-    public AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
+    public synchronized AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
         AppendEntriesRpcResult appendEntriesRpcResult = doAppendEntries(appendEntriesRpcParam);
 
         processCommunicationHigherTerm(appendEntriesRpcParam.getTerm());

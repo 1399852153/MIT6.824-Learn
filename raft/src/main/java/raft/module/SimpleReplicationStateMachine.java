@@ -3,13 +3,11 @@ package raft.module;
 import com.fasterxml.jackson.core.type.TypeReference;
 import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
-import raft.RaftServer;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
-import raft.util.RaftFileUtil;
+import raft.util.MyRaftFileUtil;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,12 +21,13 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
 
     private final File persistenceFile;
 
-    public SimpleReplicationStateMachine(int serverId) {
-        String userPath = System.getProperty("user.dir") + File.separator + "#" + serverId;
+    public SimpleReplicationStateMachine(int serverId){
+        String userPath = System.getProperty("user.dir") + File.separator + serverId;
 
         this.persistenceFile = new File(userPath + File.separator + "raftReplicationStateMachine" + serverId + ".txt");
+        MyRaftFileUtil.createFile(persistenceFile);
 
-        String fileContent = RaftFileUtil.getFileContent(persistenceFile);
+        String fileContent = MyRaftFileUtil.getFileContent(persistenceFile);
         if(StringUtils.hasText(fileContent)){
             kvMap = JsonUtil.json2Obj(fileContent,new TypeReference<Map<String,String>>(){});
         }else{
@@ -41,7 +40,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
         kvMap.put(setCommand.getKey(),setCommand.getValue());
 
         // 每次写操作完都持久化一遍(简单起见，暂时不考虑性能问题)
-        RaftFileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
+        MyRaftFileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
     }
 
     @Override

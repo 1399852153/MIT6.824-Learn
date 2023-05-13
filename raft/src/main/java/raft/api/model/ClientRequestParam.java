@@ -4,7 +4,10 @@ import raft.api.command.Command;
 
 public class ClientRequestParam {
 
-    private final Command command;
+    private Command command;
+
+    public ClientRequestParam() {
+    }
 
     public ClientRequestParam(Command command) {
         this.command = command;

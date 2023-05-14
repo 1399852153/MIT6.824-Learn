@@ -142,6 +142,8 @@ public class RaftServer implements RaftService {
             // 把自己认为的leader告诉客户端
             ClientRequestResult clientRequestResult = new ClientRequestResult();
             clientRequestResult.setLeaderAddress(new URLAddress(leaderConfig.getIp(),leaderConfig.getPort()));
+
+            logger.info("not leader response known leader, result={}",clientRequestResult);
             return clientRequestResult;
         }
 
@@ -155,6 +157,9 @@ public class RaftServer implements RaftService {
             ClientRequestResult clientRequestResult = new ClientRequestResult();
             clientRequestResult.setSuccess(true);
             clientRequestResult.setValue(value);
+
+            logger.info("response getCommand, result={}",clientRequestResult);
+
             return clientRequestResult;
         }
 
@@ -167,11 +172,18 @@ public class RaftServer implements RaftService {
         newLogEntry.setLogIndex(this.logModule.getLastIndex() + 1);
         newLogEntry.setCommand(clientRequestParam.getCommand());
 
+
+        logger.info("handle setCommand, do writeLocalLog entry={}",newLogEntry);
+
         // 预写入日志
         logModule.writeLocalLog(newLogEntry);
-        logModule.setLastIndex(newLogEntry.getLogIndex());
+
+        logger.info("handle setCommand, do writeLocalLog success!");
+
 
         List<AppendEntriesRpcResult> appendEntriesRpcResultList = logModule.replicationLogEntry(newLogEntry);
+
+        logger.info("do replicationLogEntry, result={}",appendEntriesRpcResultList);
 
         // successNum需要加上自己的1票
         long successNum = appendEntriesRpcResultList.stream().filter(AppendEntriesRpcResult::isSuccess).count() + 1;
@@ -209,6 +221,8 @@ public class RaftServer implements RaftService {
         if(appendEntriesRpcParam.getTerm() < this.currentTerm){
             // Reply false if term < currentTerm (§5.1)
             // 拒绝处理任期低于自己的老leader的请求
+
+            logger.info("doAppendEntries term < currentTerm");
             return new AppendEntriesRpcResult(this.currentTerm,false);
         }
 
@@ -224,6 +238,8 @@ public class RaftServer implements RaftService {
             this.cleanVotedFor();
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
             raftLeaderElectionModule.refreshLastHeartbeatTime();
+
+            logger.info("doAppendEntries heartbeat");
 
             // 心跳请求，直接返回
             return new AppendEntriesRpcResult(this.currentTerm,true);
@@ -245,9 +261,14 @@ public class RaftServer implements RaftService {
                 //  Reply false if log doesn’t contain an entry at prevLogIndex
                 //  whose term matches prevLogTerm (§5.3)
                 //  本地日志和参数中的PrevLogIndex和PrevLogTerm对不上(对应日志不存在，或者任期对不上)
-                return new AppendEntriesRpcResult(this.currentTerm, false);
+
+                logger.info("doAppendEntries localEntry not match, localLogEntry={}",localLogEntry);
+
+                return new AppendEntriesRpcResult(this.currentTerm,false);
             }
         }
+
+        logger.info("doAppendEntries localEntry is match");
 
         // 简单起见，先只考虑一次rpc仅单个entry的场景
         LogEntry newLogEntry = appendEntriesRpcParam.getEntries().get(0);
@@ -259,7 +280,9 @@ public class RaftServer implements RaftService {
             // 本地日志不存在，追加写入
             // Append any new entries not already in the log
             logModule.writeLocalLog(newLogEntry);
-            logModule.setLastIndex(newLogEntry.getLogIndex());
+
+
+            logger.info("doAppendEntries localEntry not exist, append log");
 
             appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
         }else{
@@ -279,7 +302,6 @@ public class RaftServer implements RaftService {
                 logModule.deleteLocalLog(newLogEntry.getLogIndex());
                 // 然后再写入新的日志
                 logModule.writeLocalLog(newLogEntry);
-                logModule.setLastIndex(newLogEntry.getLogIndex());
 
                 // 返回成功
                 appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
@@ -300,6 +322,8 @@ public class RaftServer implements RaftService {
                 // 全读取出来(读取出来是按照index从小到大排好序的)
                 List<LogEntry> logEntryList = logModule.readLocalLog(lastApplied+1,lastCommittedIndex);
                 for(LogEntry logEntry : logEntryList){
+                    logger.info("kvReplicationStateMachine.apply, logEntry={}",logEntry);
+
                     // 按照顺序依次作用到状态机中
                     this.kvReplicationStateMachine.apply((SetCommand) logEntry.getCommand());
                 }

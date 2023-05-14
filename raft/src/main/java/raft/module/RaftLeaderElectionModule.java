@@ -45,6 +45,11 @@ public class RaftLeaderElectionModule {
 //        logger.info("registerHeartBeatTimeoutCheckTaskWithRandomTimeout!");
 
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
+        if(currentServer.getCurrentTerm() > 0 && currentServer.getRaftConfig().getDebugElectionTimeout() != null){
+            // debug的时候多等待一些时间
+            electionTimeout = currentServer.getRaftConfig().getDebugElectionTimeout();
+        }
+
         long randomElectionTimeout = getRandomElectionTimeout();
         // 选举超时时间的基础上，加上一个随机化的时间
         long delayTime = randomElectionTimeout + electionTimeout * 1000L;

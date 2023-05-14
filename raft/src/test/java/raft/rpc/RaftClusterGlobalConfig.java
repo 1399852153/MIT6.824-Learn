@@ -27,13 +27,15 @@ public class RaftClusterGlobalConfig {
      * */
     public static final List<RaftNodeConfig> raftNodeConfigList = Arrays.asList(
         new RaftNodeConfig(1,"127.0.0.1",8001)
-//        ,new RaftNodeConfig(2,"127.0.0.1",8002)
-//        ,new RaftNodeConfig(3,"127.0.0.1",8003)
+        ,new RaftNodeConfig(2,"127.0.0.1",8002)
+        ,new RaftNodeConfig(3,"127.0.0.1",8003)
 //        ,new RaftNodeConfig(4,"127.0.0.1",8004)
 //        ,new RaftNodeConfig(5,"127.0.0.1",8005)
     );
 
     public static final int electionTimeout = 3;
+
+    public static final Integer debugElectionTimeout = 3000;
 
     public static final int heartbeatInterval = 1;
 
@@ -58,6 +60,8 @@ public class RaftClusterGlobalConfig {
         RaftConfig raftConfig = new RaftConfig(
             currentNodeConfig,RaftClusterGlobalConfig.raftNodeConfigList);
         raftConfig.setElectionTimeout(RaftClusterGlobalConfig.electionTimeout);
+        raftConfig.setDebugElectionTimeout(RaftClusterGlobalConfig.debugElectionTimeout);
+
         raftConfig.setHeartbeatInternal(RaftClusterGlobalConfig.heartbeatInterval);
         raftConfig.setLeaderAutoFailCount(RaftClusterGlobalConfig.leaderAutoFailCount);
         // 随机化选举超时时间的范围

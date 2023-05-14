@@ -30,6 +30,11 @@ public class RaftConfig {
     private int electionTimeout;
 
     /**
+     * debug的时候把这个值设置的长一点，避免阻塞时触发了新的选举(只用于debug)
+     * */
+    private Integer debugElectionTimeout;
+
+    /**
      * 选举超时时间的随机化区间 单位：毫秒
      * */
     private Range<Integer> electionTimeoutRandomRange;
@@ -79,6 +84,14 @@ public class RaftConfig {
 
     public int getElectionTimeout() {
         return electionTimeout;
+    }
+
+    public Integer getDebugElectionTimeout() {
+        return debugElectionTimeout;
+    }
+
+    public void setDebugElectionTimeout(Integer debugElectionTimeout) {
+        this.debugElectionTimeout = debugElectionTimeout;
     }
 
     public int getHeartbeatInternal() {

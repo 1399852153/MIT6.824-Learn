@@ -87,8 +87,8 @@ public class LogModule {
 
                 this.lastIndex = randomAccessFile.readInt();
             }else{
-                // 之前的日志为空，lastIndex初始化为0
-                this.lastIndex = 0;
+                // 之前的日志为空，lastIndex初始化为-1
+                this.lastIndex = -1;
             }
         }
     }
@@ -96,7 +96,7 @@ public class LogModule {
     /**
      * 按照顺序追加写入日志
      * */
-    public void writeLocalLog(LogEntry logEntry){
+    public synchronized void writeLocalLog(LogEntry logEntry){
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"rw")){
             // 追加写入
             randomAccessFile.seek(logFile.length());
@@ -114,6 +114,9 @@ public class LogModule {
 
             // 持久化currentOffset的值，二阶段提交修改currentOffset的值，宕机恢复时以持久化的值为准
             refreshMetadata();
+
+            // 设置最后写入的索引编号，lastIndex
+            setLastIndex(logEntry.getLogIndex());
         } catch (IOException e) {
             throw new MyRaftException("logModule writeLog error!",e);
         }
@@ -122,7 +125,7 @@ public class LogModule {
     /**
      * 根据日志索引号，获得对应的日志记录
      * */
-    public LogEntry readLocalLog(long logIndex) {
+    public synchronized LogEntry readLocalLog(long logIndex) {
         List<LogEntry> logEntryList = readLocalLogNoSort(logIndex,logIndex);
         if(logEntryList.isEmpty()){
             return null;
@@ -136,7 +139,7 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
      * */
-    public List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
+    public synchronized List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
         // 读取出来的时候是index从大到小排列的
         List<LogEntry> logEntryList = readLocalLogNoSort(logIndexStart,logIndexEnd);
 
@@ -150,7 +153,7 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
      * */
-    private List<LogEntry> readLocalLogNoSort(long logIndexStart, long logIndexEnd) {
+    private synchronized List<LogEntry> readLocalLogNoSort(long logIndexStart, long logIndexEnd) {
         if(logIndexStart > logIndexEnd){
             throw new MyRaftException("readLocalLog logIndexStart > logIndexEnd! " +
                 "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
@@ -212,7 +215,7 @@ public class LogModule {
     /**
      * 删除包括logIndex以及更大序号的所有日志
      * */
-    public void deleteLocalLog(long logIndexNeedDelete){
+    public synchronized void deleteLocalLog(long logIndexNeedDelete){
         // 已经确认提交的日志不能删除
         if(logIndexNeedDelete <= this.lastCommittedIndex){
             throw new MyRaftException("can not delete committed log! " +
@@ -268,7 +271,7 @@ public class LogModule {
     /**
      * 向集群广播，令follower复制新的日志条目
      * */
-    public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry lastEntry) {
+    public synchronized List<AppendEntriesRpcResult> replicationLogEntry(LogEntry lastEntry) {
         List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
 
         List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
@@ -350,8 +353,8 @@ public class LogModule {
         return appendEntriesRpcResultList;
     }
 
-    public LogEntry getLastLogEntry(){
-        return readLocalLogByOffset(this.currentOffset);
+    public synchronized LogEntry getLastLogEntry(){
+        return readLocalLog(this.lastIndex);
     }
 
     // ============================= get/set ========================================
@@ -360,7 +363,7 @@ public class LogModule {
         return lastIndex;
     }
 
-    public void setLastIndex(long lastIndex) {
+    public synchronized void setLastIndex(long lastIndex) {
         this.lastIndex = lastIndex;
     }
 
@@ -368,7 +371,7 @@ public class LogModule {
         return lastCommittedIndex;
     }
 
-    public void setLastCommittedIndex(long lastCommittedIndex) {
+    public synchronized void setLastCommittedIndex(long lastCommittedIndex) {
         if(lastCommittedIndex < this.lastCommittedIndex){
             throw new MyRaftException("set lastCommittedIndex error this.lastCommittedIndex=" + this.lastCommittedIndex
                     + " lastCommittedIndex=" + lastCommittedIndex);
@@ -377,11 +380,11 @@ public class LogModule {
         this.lastCommittedIndex = lastCommittedIndex;
     }
 
-    public long getLastApplied() {
+    public synchronized long getLastApplied() {
         return lastApplied;
     }
 
-    public void setLastApplied(long lastApplied) {
+    public synchronized void setLastApplied(long lastApplied) {
         if(lastApplied < this.lastApplied){
             throw new MyRaftException("set lastApplied error this.lastApplied=" + this.lastApplied
                 + " lastApplied=" + lastApplied);
@@ -400,24 +403,7 @@ public class LogModule {
         this.logMetaDataFileOriginal.delete();
     }
 
-    private LogEntry readLocalLogByOffset(long offset){
-        try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
-            if(offset >= LONG_SIZE) {
-                // 跳转到记录的offset处
-                randomAccessFile.seek(offset - LONG_SIZE);
-
-                long logIndex = randomAccessFile.readLong();
-
-                return readLocalLogByOffset(randomAccessFile,logIndex);
-            }else{
-                return null;
-            }
-        } catch (IOException e) {
-            throw new MyRaftException("readLocalLog error!",e);
-        }
-    }
-
-    private LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
+    private synchronized LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
         LogEntry logEntry = new LogEntry();
         logEntry.setLogIndex(logIndex);
         logEntry.setLogTerm(randomAccessFile.readInt());
@@ -433,7 +419,7 @@ public class LogModule {
         return logEntry;
     }
 
-    private void refreshMetadata() throws IOException {
+    private synchronized void refreshMetadata() throws IOException {
         this.logMetaDataFile.seek(0);
         this.logMetaDataFile.writeLong(this.currentOffset);
     }

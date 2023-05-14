@@ -3,6 +3,9 @@ package raft.module;
 import com.fasterxml.jackson.core.type.TypeReference;
 import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import raft.RaftServer;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
 import raft.util.MyRaftFileUtil;
@@ -16,6 +19,7 @@ import java.util.Map;
  * 简单起见：内存中是一个k/v Map，每次写请求都全量写入磁盘
  * */
 public class SimpleReplicationStateMachine implements KVReplicationStateMachine {
+    private static final Logger logger = LoggerFactory.getLogger(SimpleReplicationStateMachine.class);
 
     private final Map<String,String> kvMap;
 
@@ -37,10 +41,12 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
 
     @Override
     public synchronized void apply(SetCommand setCommand) {
+        logger.info("apply setCommand start,{}",setCommand);
         kvMap.put(setCommand.getKey(),setCommand.getValue());
 
         // 每次写操作完都持久化一遍(简单起见，暂时不考虑性能问题)
         MyRaftFileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
+        logger.info("apply setCommand end");
     }
 
     @Override

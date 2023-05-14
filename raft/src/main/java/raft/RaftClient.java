@@ -6,6 +6,7 @@ import myrpc.consumer.Consumer;
 import myrpc.consumer.ConsumerBootstrap;
 import myrpc.consumer.context.ConsumerRpcContext;
 import myrpc.consumer.context.ConsumerRpcContextHolder;
+import myrpc.exception.MyRpcException;
 import myrpc.registry.Registry;
 import raft.api.command.Command;
 import raft.api.model.ClientRequestParam;
@@ -43,6 +44,9 @@ public class RaftClient {
         ClientRequestResult clientRequestResult = this.raftServiceProxy.clientRequest(clientRequestParam);
 
         if(clientRequestResult.getLeaderAddress() == null){
+            if(!clientRequestResult.isSuccess()){
+                throw new MyRpcException("doRequest error!");
+            }
             // 访问到了leader，得到结果
             return clientRequestResult.getValue();
         }else{

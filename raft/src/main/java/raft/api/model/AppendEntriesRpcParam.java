@@ -90,4 +90,16 @@ public class AppendEntriesRpcParam {
     public void setLeaderCommit(long leaderCommit) {
         this.leaderCommit = leaderCommit;
     }
+
+    @Override
+    public String toString() {
+        return "AppendEntriesRpcParam{" +
+                "term=" + term +
+                ", leaderId=" + leaderId +
+                ", prevLogIndex=" + prevLogIndex +
+                ", prevLogTerm=" + prevLogTerm +
+                ", entries=" + entries +
+                ", leaderCommit=" + leaderCommit +
+                '}';
+    }
 }

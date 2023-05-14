@@ -34,6 +34,7 @@ public class LogModuleTest {
             newLogEntry.setLogIndex(1);
             newLogEntry.setLogTerm(1);
             newLogEntry.setCommand(new SetCommand("k1","v1"));
+
             logModule.writeLocalLog(newLogEntry);
 
             LogEntry logEntry = logModule.readLocalLog(1);
@@ -104,5 +105,30 @@ public class LogModuleTest {
         }
 
         logModule.clean();
+    }
+
+    @Test
+    public void test2() throws Exception {
+        int serverId = 99998;
+        RaftNodeConfig raftNodeConfig = new RaftNodeConfig(serverId);
+        RaftServer raftServer = new RaftServer(new RaftConfig(raftNodeConfig, Arrays.asList(raftNodeConfig)));
+        raftServer.setOtherNodeInCluster(new ArrayList<>());
+        LogModule logModule = new LogModule(raftServer);
+        logModule.clean();
+
+        logModule = new LogModule(raftServer);
+
+        {
+            LogEntry newLogEntry = new LogEntry();
+            newLogEntry.setLogIndex(1);
+            newLogEntry.setLogTerm(1);
+            newLogEntry.setCommand(new SetCommand("k1","v1"));
+
+            logModule.writeLocalLog(newLogEntry);
+
+            LogEntry logEntry = logModule.getLastLogEntry();
+            Assert.assertEquals(logEntry.getLogIndex(),1);
+            Assert.assertEquals(logEntry.getLogTerm(),1);
+        }
     }
 }

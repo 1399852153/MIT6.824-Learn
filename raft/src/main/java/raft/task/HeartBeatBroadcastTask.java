@@ -43,11 +43,11 @@ public class HeartBeatBroadcastTask implements Runnable{
 
         processAutoFail();
 
-        logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
+//        logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
     }
 
     public static void doHeartBeatBroadcast(RaftServer currentServer){
-        logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
+//        logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
 
         // 先刷新自己的心跳时间
         currentServer.getRaftLeaderElectionModule().refreshLastHeartbeatTime();
@@ -67,11 +67,12 @@ public class HeartBeatBroadcastTask implements Runnable{
             appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
             appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
         }else{
-            appendEntriesRpcParam.setPrevLogTerm(0);
-            appendEntriesRpcParam.setPrevLogIndex(0);
+            appendEntriesRpcParam.setPrevLogTerm(-1);
+            appendEntriesRpcParam.setPrevLogIndex(-1);
         }
         appendEntriesRpcParam.setLeaderCommit(currentServer.getLogModule().getLastCommittedIndex());
 
+        // todo 补上日志复制
         for(RaftService node : otherNodeInCluster){
             Future<AppendEntriesRpcResult> future = currentServer.getRaftHeartBeatBroadcastModule().getRpcThreadPool().submit(
                 ()-> {

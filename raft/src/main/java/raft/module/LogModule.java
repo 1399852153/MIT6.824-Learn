@@ -1,6 +1,8 @@
 package raft.module;
 
 import myrpc.serialize.json.JsonUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.command.Command;
 import raft.api.model.*;
@@ -18,6 +20,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class LogModule {
+
+    private static final Logger logger = LoggerFactory.getLogger(LogModule.class);
 
     private static final int LONG_SIZE = 8;
 
@@ -55,7 +59,9 @@ public class LogModule {
 
         int serverId = currentServer.getServerId();
 
-        this.rpcThreadPool = Executors.newFixedThreadPool(Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2);
+        int threadPoolSize = Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2;
+        logger.info("LogModule threadPoolSize={}",threadPoolSize);
+        this.rpcThreadPool = Executors.newFixedThreadPool(threadPoolSize);
 
         String userPath = System.getProperty("user.dir") + File.separator + serverId;
 
@@ -125,7 +131,7 @@ public class LogModule {
     /**
      * 根据日志索引号，获得对应的日志记录
      * */
-    public synchronized LogEntry readLocalLog(long logIndex) {
+    public LogEntry readLocalLog(long logIndex) {
         List<LogEntry> logEntryList = readLocalLogNoSort(logIndex,logIndex);
         if(logEntryList.isEmpty()){
             return null;
@@ -153,7 +159,7 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
      * */
-    private synchronized List<LogEntry> readLocalLogNoSort(long logIndexStart, long logIndexEnd) {
+    private List<LogEntry> readLocalLogNoSort(long logIndexStart, long logIndexEnd) {
         if(logIndexStart > logIndexEnd){
             throw new MyRaftException("readLocalLog logIndexStart > logIndexEnd! " +
                 "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
@@ -310,7 +316,10 @@ public class LogModule {
                         throw new MyRaftException("replicationLogEntry logEntryList size error!" + logEntryList.size());
                     }
 
+                    logger.info("leader do appendEntries, node={}, appendEntriesRpcParam={}",node,appendEntriesRpcParam);
                     AppendEntriesRpcResult appendEntriesRpcResult = node.appendEntries(appendEntriesRpcParam);
+                    logger.info("leader do appendEntries, node={}, appendEntriesRpcResult={}",node,appendEntriesRpcResult);
+
                     finallyResult = appendEntriesRpcResult;
                     // 收到更高任期的处理
                     boolean beFollower = currentServer.processCommunicationHigherTerm(appendEntriesRpcResult.getTerm());
@@ -348,12 +357,14 @@ public class LogModule {
         // 获得结果
         List<AppendEntriesRpcResult> appendEntriesRpcResultList = CommonUtil.concurrentGetRpcFutureResult(
                 "do appendEntries", futureList,
-                this.rpcThreadPool,1, TimeUnit.SECONDS);
+                this.rpcThreadPool,3, TimeUnit.SECONDS);
+
+        logger.info("leader replicationLogEntry appendEntriesRpcResultList={}",appendEntriesRpcResultList);
 
         return appendEntriesRpcResultList;
     }
 
-    public synchronized LogEntry getLastLogEntry(){
+    public LogEntry getLastLogEntry(){
         return readLocalLog(this.lastIndex);
     }
 

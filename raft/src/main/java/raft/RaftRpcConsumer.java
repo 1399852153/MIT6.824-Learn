@@ -53,4 +53,11 @@ public class RaftRpcConsumer implements RaftService {
         consumerRpcContext.setTargetProviderAddress(
             new URLAddress(targetNodeConfig.getIp(),targetNodeConfig.getPort()));
     }
+
+    @Override
+    public String toString() {
+        return "RaftRpcConsumer{" +
+            "targetNodeConfig=" + targetNodeConfig +
+            '}';
+    }
 }

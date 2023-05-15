@@ -35,7 +35,10 @@ public class RaftClusterGlobalConfig {
 
     public static final int electionTimeout = 3;
 
-    public static final Integer debugElectionTimeout = 3000;
+//    public static final Integer debugElectionTimeout = 3000;
+
+    public static final Integer debugElectionTimeout = null;
+
 
     public static final int heartbeatInterval = 1;
 

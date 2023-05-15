@@ -53,7 +53,7 @@ public class RaftLeaderElectionModule {
         long randomElectionTimeout = getRandomElectionTimeout();
         // 选举超时时间的基础上，加上一个随机化的时间
         long delayTime = randomElectionTimeout + electionTimeout * 1000L;
-        logger.info("registerHeartBeatTimeoutCheckTaskWithRandomTimeout delayTime={}",delayTime);
+        logger.debug("registerHeartBeatTimeoutCheckTaskWithRandomTimeout delayTime={}",delayTime);
         scheduledExecutorService.schedule(
             new HeartBeatTimeoutCheckTask(currentServer,this),delayTime,TimeUnit.MILLISECONDS);
     }
@@ -91,7 +91,7 @@ public class RaftLeaderElectionModule {
         // 接受新的心跳,说明现在leader是存活的，清理掉之前的投票信息
         this.currentServer.cleanVotedFor();
 
-        logger.info("refreshLastHeartbeatTime! {}",currentServer.getServerId());
+        logger.debug("refreshLastHeartbeatTime! {}",currentServer.getServerId());
     }
 
     public Date getLastHeartbeatTime() {

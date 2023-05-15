@@ -16,6 +16,7 @@ import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
 import raft.module.SimpleReplicationStateMachine;
 import raft.module.api.KVReplicationStateMachine;
+import raft.util.CollectionUtil;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -122,8 +123,14 @@ public class RaftServer implements RaftService {
 
         processCommunicationHigherTerm(appendEntriesRpcParam.getTerm());
 
-        logger.info("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
-            appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
+        if(!CollectionUtil.isEmpty(appendEntriesRpcParam.getEntries())){
+            logger.info("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
+                appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
+        }else{
+            logger.debug("do appendEntries appendEntriesRpcParam={},appendEntriesRpcResult={},currentServerId={}",
+                appendEntriesRpcParam,appendEntriesRpcResult,this.serverId);
+        }
+
         return appendEntriesRpcResult;
     }
 
@@ -179,7 +186,6 @@ public class RaftServer implements RaftService {
         logModule.writeLocalLog(newLogEntry);
 
         logger.info("handle setCommand, do writeLocalLog success!");
-
 
         List<AppendEntriesRpcResult> appendEntriesRpcResultList = logModule.replicationLogEntry(newLogEntry);
 
@@ -239,7 +245,7 @@ public class RaftServer implements RaftService {
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
             raftLeaderElectionModule.refreshLastHeartbeatTime();
 
-            logger.info("doAppendEntries heartbeat");
+            logger.debug("doAppendEntries heartbeat");
 
             // 心跳请求，直接返回
             return new AppendEntriesRpcResult(this.currentTerm,true);
@@ -249,20 +255,20 @@ public class RaftServer implements RaftService {
 
         // AppendEntry可靠性校验，如果prevLogIndex和prevLogTerm不匹配，则需要返回false，让leader发更早的日志过来
         {
-            LogEntry localLogEntry = logModule.readLocalLog(appendEntriesRpcParam.getPrevLogIndex());
-            if(localLogEntry == null){
+            LogEntry localPrevLogEntry = logModule.readLocalLog(appendEntriesRpcParam.getPrevLogIndex());
+            if(localPrevLogEntry == null){
                 // 当前节点日志条目为空(默认任期为-1，这个是约定)
-                localLogEntry = new LogEntry();
-                localLogEntry.setLogIndex(-1);
-                localLogEntry.setLogTerm(-1);
+                localPrevLogEntry = new LogEntry();
+                localPrevLogEntry.setLogIndex(-1);
+                localPrevLogEntry.setLogTerm(-1);
             }
 
-            if (localLogEntry.getLogTerm() == appendEntriesRpcParam.getPrevLogTerm()) {
+            if (localPrevLogEntry.getLogTerm() != appendEntriesRpcParam.getPrevLogTerm()) {
                 //  Reply false if log doesn’t contain an entry at prevLogIndex
                 //  whose term matches prevLogTerm (§5.3)
                 //  本地日志和参数中的PrevLogIndex和PrevLogTerm对不上(对应日志不存在，或者任期对不上)
 
-                logger.info("doAppendEntries localEntry not match, localLogEntry={}",localLogEntry);
+                logger.info("doAppendEntries localPrevLogEntry not match, localLogEntry={}",localPrevLogEntry);
 
                 return new AppendEntriesRpcResult(this.currentTerm,false);
             }

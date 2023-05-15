@@ -51,7 +51,7 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
     }
 
     private void doTask(){
-        logger.info("do HeartBeatTimeoutCheck start {}",currentServer.getServerId());
+        logger.debug("do HeartBeatTimeoutCheck start {}",currentServer.getServerId());
 
         int electionTimeout = currentServer.getRaftConfig().getElectionTimeout();
 
@@ -60,7 +60,7 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
         Date lastHeartBeatTime = raftLeaderElectionModule.getLastHeartbeatTime();
         long diffTime = currentDate.getTime() - lastHeartBeatTime.getTime();
 
-        logger.info("currentDate={}, lastHeartBeatTime={}, diffTime={}, serverId={}",
+        logger.debug("currentDate={}, lastHeartBeatTime={}, diffTime={}, serverId={}",
             currentDate,lastHeartBeatTime,diffTime,currentServer.getServerId());
         // 心跳超时判断
         if(diffTime > (electionTimeout * 1000L)){
@@ -134,10 +134,10 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             this.currentServer.cleanVotedFor();
         }else{
             // 认定为心跳正常，无事发生
-            logger.info("HeartBeatTimeoutCheck check success {}",currentServer.getServerId());
+            logger.debug("HeartBeatTimeoutCheck check success {}",currentServer.getServerId());
         }
 
-        logger.info("do HeartBeatTimeoutCheck end {}",currentServer.getServerId());
+        logger.debug("do HeartBeatTimeoutCheck end {}",currentServer.getServerId());
     }
 
     /**

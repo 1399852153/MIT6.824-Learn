@@ -873,27 +873,6 @@ Raft通过比较两个日志中最后一个条目的索引和任期来决定谁�
 如果两个日志中最后的条目有着不同的任期，则任期较后的日志是更新的。
 如果两个日志中最后的条目有着相同的任期，则较长的(注：索引值更大的)那个日志是更新的。
 
-![Figure8.png](Figure8.png)
-#####
-A time sequence showing why a leader cannot determine commitment using log entries from older terms. 
-In(a) S1 is leader and partially replicates the log entry at index2. 
-In (b) S1 crashes; S5 is elected leader for term 3 with votes from S3, S4, and itself, and accepts a different entry at log index 2.
-In (c) S5 crashes; S1 restarts, is elected leader, and continues replication.
-At this point, the log entry from term 2 has been replicated on a majority of the servers, but it is not committed. 
-If S1 crashes as in (d), S5 could be elected leader (with votes from S2, S3, and S4) and overwrite the entry with its own entry from term 3. 
-However, if S1 replicates an entry from its current term on a majority of the servers before crashing, as in (e), 
-then this entry is committed (S5 cannot win an election). 
-At this point all preceding entries in the log are committed as well.
-#####
-一个时间序列，展示了为什么leader不能使用来自旧任期的日志条目来决定是否已提交。(注：S1-S5是集群中的5台服务器，a-e是时间序列)
-在(a)中S1是leader并且部分的复制了位于index2的日志条目。
-在(b)中S1崩溃了;S5通过任期3中来自S3，S4和它自己的投票而被选举为leader，并且接受了一个不同的条目在日志index2。
-在(c)中S5崩溃了;S1重新启动，被选举为了leader，并且继续复制。
-在这个时间点，来自任期2的日志条目已经被复制到了大多数服务器中，但还没有被提交。
-如果S1像(d)中那样崩溃了，S5可以被选举为leader(通过来自S2，S3,和S4的投票)并且用它自己的来自任期3的条目进行覆盖。
-然而，如果S1在崩溃前复制了来自它当前任期的条目在大多数服务器中，就像(e),则这一条目是已提交的(S5不能赢得选举)。
-此时日志中所有之前的条目都已经被提交。
-
 ### 5.4.2 Committing entries from previous terms(来自之前任期的已提交条目)
 As described in Section 5.3, a leader knows that an entry from its current term is committed once
 that entry is stored on a majority of the servers. 
@@ -906,6 +885,27 @@ yet can still be overwritten by a future leader.
 如果leader在提交一个条目前崩溃了，未来的leader将试图去完成该条目的复制。
 然而，leader无法立即得出结论，即一个来自之前任期的条目一旦被大多数服务器所存储就是已被提交的。
 图8展示了这样一种情况，一个老的日志条目被存储在了大多数的服务器上，但任然被未来的leader覆盖掉了。
+
+![Figure8.png](Figure8.png)
+#####
+A time sequence showing why a leader cannot determine commitment using log entries from older terms.
+In(a) S1 is leader and partially replicates the log entry at index2.
+In (b) S1 crashes; S5 is elected leader for term 3 with votes from S3, S4, and itself, and accepts a different entry at log index 2.
+In (c) S5 crashes; S1 restarts, is elected leader, and continues replication.
+At this point, the log entry from term 2 has been replicated on a majority of the servers, but it is not committed.
+If S1 crashes as in (d), S5 could be elected leader (with votes from S2, S3, and S4) and overwrite the entry with its own entry from term 3.
+However, if S1 replicates an entry from its current term on a majority of the servers before crashing, as in (e),
+then this entry is committed (S5 cannot win an election).
+At this point all preceding entries in the log are committed as well.
+#####
+一个时间序列，展示了为什么leader不能使用来自旧任期的日志条目来决定是否已提交。(注：S1-S5是集群中的5台服务器，a-e是时间序列)
+在(a)中S1是leader并且部分的复制了位于index2的日志条目。
+在(b)中S1崩溃了;S5通过任期3中来自S3，S4和它自己的投票而被选举为leader，并且接受了一个不同的条目在日志index2。
+在(c)中S5崩溃了;S1重新启动，被选举为了leader，并且继续复制。
+在这个时间点，来自任期2的日志条目已经被复制到了大多数服务器中，但还没有被提交。
+如果S1像(d)中那样崩溃了，S5可以被选举为leader(通过来自S2，S3,和S4的投票)并且用它自己的来自任期3的条目进行覆盖。
+然而，如果S1在崩溃前复制了来自它当前任期的条目在大多数服务器中，就像(e),则这一条目是已提交的(S5不能赢得选举)。
+此时日志中所有之前的条目都已经被提交。
 
 ![Figure9.png](Figure9.png)
 #####
@@ -1098,7 +1098,7 @@ one with a majority of the old configuration (C*old*) and another with a majorit
 在这个例子中，集群从3台服务器增长到5台。
 不幸的是，这个时间点将会在相同的任期内选举出两个不同的leader，其中之一获得了旧配置中的大多数(C*old*)同时另一个获得了新配置中的大多数(C*new*)。
 
-### 6 Cluster membership changes(集群成员变更)
+## 6 Cluster membership changes(集群成员变更)
 Up until now we have assumed that the cluster configuration (the set of servers participating in the consensus algorithm) is fixed.
 In practice, it will occasionally be necessary to change the configuration, 
 for example to replace servers when they fail or to change the degree of replication.
@@ -1263,7 +1263,7 @@ if a leader is able to get heartbeats to its cluster, then it will not be depose
 这不会影响正常的选举，即每一个服务器在开始一轮选举之前至少等待一个最小的选举超时时间。
 然而，它有助于避免移除服务器时的混乱：如果一个leader能够提供集群中的心跳，则它将不会被一个更大的任期编号给取代。
 
-### 7 Log compaction(日志压缩)
+## 7 Log compaction(日志压缩)
 Raft’s log grows during normal operation to incorporate more client requests, but in a practical system, it cannot grow without bound. 
 As the log grows longer, it occupies more space and takes more time to replay. 
 This will eventually cause availability problems without some mechanism to discard obsolete information that has accumulated in the log.
@@ -1422,7 +1422,7 @@ can be used to create an in-memory snapshot of the entire state machine (our imp
 例如，使用函数式数据结构(functional data structures)构建的状态机能自然的支持这一点。
 或者，操作系统的写时复制支持(例如，linux中的fork)可以被用于创建整个状态机的内存快照(我们的实现使用了这个方法)。
 
-### 8 Client interaction(客户端交互)
+## 8 Client interaction(客户端交互)
 This section describes how clients interact with Raft, 
 including how clients find the cluster leader and how Raft supports linearizable semantics [10]. 
 These issues apply to all consensus-based systems, and Raft’s solutions are similar to other systems.
@@ -1486,7 +1486,7 @@ Raft通过在leader开始其任期时，让每一个leader提交一个空白的_
 Raft通过让leader在响应只读请求之前与集群中的大多数交换心跳信息来解决这一问题。
 或者，leader可以依赖心跳机制来提供一种租约的形式，但这将会依赖于时钟的安全性(假设时间误差是有限的)。
 
-### 9 Implementation and evaluation(实现与评估)
+## 9 Implementation and evaluation(实现与评估)
 We have implemented Raft as part of a replicated state machine that stores configuration information for RAMCloud [33] 
 and assists in failover of the RAMCloud coordinator. 
 The Raft implementation contains roughly 2000 lines of C++ code, not including tests, comments, or blank lines.
@@ -1705,7 +1705,7 @@ such timeouts are unlikely to cause unnecessary leader changes and will still pr
 这可能会导致不必要的leader变更以及更低的整体系统可用性。
 我们推荐使用一个保守的选举超时时间比如150-300ms；这一超时时间不太可能造成不必要的leader变更并且将仍然提供良好的可用性。
 
-### 10 Related work
+## 10 Related work
 There have been numerous publications related to consensus algorithms, many of which fall into one of the following categories:
 * Lamport’s original description of Paxos [15], and attempts to explain it more clearly [16, 20, 21].
 * Elaborations of Paxos, which fill in missing details and modify the algorithm to provide a better foundation for implementation [26, 39, 13].
@@ -1816,7 +1816,7 @@ Lamport的α-based方法没有被Raft选中，因为它假设可以在没有lead
 相比之下，VR在配置变更期间停止所有正常的请求处理并且SMART对未完成的请求施加了α-like限制。
 Raft的方法相比VR或者SMART也增加了最少的机制。
 
-### 11 Conclusion
+## 11 Conclusion
 Algorithms are often designed with correctness, efficiency, and/or conciseness as the primary goals. 
 Although these are all worthy goals, we believe that understandability is just as important.
 None of the other goals can be achieved until developers render the algorithm into a practical implementation,
@@ -1845,7 +1845,7 @@ These techniques not only improved the understandability of Raft but also made i
 以可理解性作为主要实现目标改变了我们设计Raft时的方法；随着设计的近战我们发现我们重复的复用了少量技术，例如分解问题和简化状态空间。
 这些技术不仅提高了Raft的可理解性也使得我们更容易相信它的正确性。
 
-### 12 Acknowledgments(致谢)
+## 12 Acknowledgments(致谢)
 The user study would not have been possible without the support of Ali Ghodsi, David Mazieres, 
 and the students of CS 294-91 at Berkeley and CS 240 at Stanford. 
 Scott Klemmer helped us design the user study, and Nelson Ray advised us on statistical analysis.

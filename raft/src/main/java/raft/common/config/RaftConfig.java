@@ -1,11 +1,16 @@
 package raft.common.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import raft.RaftServer;
 import raft.exception.MyRaftException;
 import raft.util.Range;
 
 import java.util.List;
 
 public class RaftConfig {
+
+    private static final Logger logger = LoggerFactory.getLogger(RaftConfig.class);
 
     /**
      * 当前服务节点的id(集群内全局唯一)
@@ -56,7 +61,7 @@ public class RaftConfig {
         // 要求集群配置必须是奇数的，偶数的节点个数容错率更差
         // 例如：5个节点的集群可以容忍2个节点故障，而6个节点的集群也只能容忍2个节点故障
         if(!isOddNumber(raftNodeConfigList.size())){
-            throw new MyRaftException("cluster server size not odd number! " + raftNodeConfigList.size());
+            logger.warn("cluster server size not odd number! size={}",raftNodeConfigList.size());
         }
 
         this.majorityNum = this.raftNodeConfigList.size()/2 + 1;

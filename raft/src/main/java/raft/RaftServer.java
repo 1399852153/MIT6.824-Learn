@@ -245,7 +245,17 @@ public class RaftServer implements RaftService {
             // entries为空，说明是心跳请求，刷新一下最近收到心跳的时间
             raftLeaderElectionModule.refreshLastHeartbeatTime();
 
-            logger.debug("doAppendEntries heartbeat");
+            long currentLastCommittedIndex = logModule.getLastCommittedIndex();
+            logger.debug("doAppendEntries heartbeat leaderCommit={},currentLastCommittedIndex={}",
+                appendEntriesRpcParam.getLeaderCommit(),currentLastCommittedIndex);
+
+            if(appendEntriesRpcParam.getLeaderCommit() > currentLastCommittedIndex) {
+                // 心跳处理里，如果leader当前已提交的日志进度超过了当前节点的进度，令当前节点状态机也跟上
+                // 如果leaderCommit >= logModule.getLastIndex(),说明当前节点的日志进度不足，但可以把目前已有的日志都提交给状态机去执行
+                // 如果leaderCommit < logModule.getLastIndex(),说明当前节点进度比较快，有一些日志是leader已复制但还没提交的，把leader已提交的那一部分作用到状态机就行
+                long minNeedCommittedIndex = Math.min(appendEntriesRpcParam.getLeaderCommit(), logModule.getLastIndex());
+                pushStatemachineApply(minNeedCommittedIndex);
+            }
 
             // 心跳请求，直接返回
             return new AppendEntriesRpcResult(this.currentTerm,true);
@@ -319,27 +329,32 @@ public class RaftServer implements RaftService {
             // 如果leaderCommit更大，说明当前节点的同步进度慢于leader，以新的entry里的index为准(更高的index还没有在本地保存(因为上面的appendEntry有效性检查))
             // 如果index of last new entry更大，说明当前节点的同步进度是和leader相匹配的，commitIndex以leader最新提交的为准
             long lastCommittedIndex = Math.min(appendEntriesRpcParam.getLeaderCommit(), newLogEntry.getLogIndex());
-            long lastApplied = logModule.getLastApplied();
-
-            // If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
-            if(lastApplied < lastCommittedIndex){
-                // 作用在状态机上的日志编号低于集群中已提交的日志编号，需要把这些已提交的日志都作用到状态机上去
-
-                // 全读取出来(读取出来是按照index从小到大排好序的)
-                List<LogEntry> logEntryList = logModule.readLocalLog(lastApplied+1,lastCommittedIndex);
-                for(LogEntry logEntry : logEntryList){
-                    logger.info("kvReplicationStateMachine.apply, logEntry={}",logEntry);
-
-                    // 按照顺序依次作用到状态机中
-                    this.kvReplicationStateMachine.apply((SetCommand) logEntry.getCommand());
-                }
-            }
-
-            this.logModule.setLastCommittedIndex(lastCommittedIndex);
-            this.logModule.setLastApplied(lastCommittedIndex);
+            pushStatemachineApply(lastCommittedIndex);
         }
 
         return appendEntriesRpcResult;
+    }
+
+    private void pushStatemachineApply(long lastCommittedIndex){
+        long lastApplied = logModule.getLastApplied();
+
+        // If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
+        if(lastApplied < lastCommittedIndex){
+            // 作用在状态机上的日志编号低于集群中已提交的日志编号，需要把这些已提交的日志都作用到状态机上去
+            logger.info("pushStatemachineApply.apply, lastApplied={},lastCommittedIndex={}",lastApplied,lastCommittedIndex);
+
+            // 全读取出来(读取出来是按照index从小到大排好序的)
+            List<LogEntry> logEntryList = logModule.readLocalLog(lastApplied+1,lastCommittedIndex);
+            for(LogEntry logEntry : logEntryList){
+                logger.info("kvReplicationStateMachine.apply, logEntry={}",logEntry);
+
+                // 按照顺序依次作用到状态机中
+                this.kvReplicationStateMachine.apply((SetCommand) logEntry.getCommand());
+            }
+        }
+
+        this.logModule.setLastCommittedIndex(lastCommittedIndex);
+        this.logModule.setLastApplied(lastCommittedIndex);
     }
 
     // ================================= get/set ============================================
@@ -430,7 +445,7 @@ public class RaftServer implements RaftService {
      *
      * @return 是否转换为了follower
      * */
-    public synchronized boolean processCommunicationHigherTerm(int rpcOtherTerm){
+    public boolean processCommunicationHigherTerm(int rpcOtherTerm){
         // If RPC request or response contains term T > currentTerm:
         // set currentTerm = T, convert to follower (§5.1)
         if(rpcOtherTerm > this.getCurrentTerm()) {

@@ -5,19 +5,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.command.Command;
-import raft.api.model.*;
+import raft.api.model.AppendEntriesRpcParam;
+import raft.api.model.AppendEntriesRpcResult;
+import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.exception.MyRaftException;
 import raft.util.CommonUtil;
 import raft.util.MyRaftFileUtil;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class LogModule {
 
@@ -43,16 +51,18 @@ public class LogModule {
      * 已提交的最大日志索引号（论文中的commitIndex）
      * rpc复制到多数节点上，日志就认为是已提交
      * */
-    private volatile long lastCommittedIndex;
+    private volatile long lastCommittedIndex = -1;
 
     /**
      * 作用到状态机上，日志就认为是已应用
      * */
-    private volatile long lastApplied;
+    private volatile long lastApplied = -1;
 
     private final ExecutorService rpcThreadPool;
 
     private final RaftServer currentServer;
+
+    private final ReentrantLock reentrantLock = new ReentrantLock();
 
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
@@ -102,7 +112,9 @@ public class LogModule {
     /**
      * 按照顺序追加写入日志
      * */
-    public synchronized void writeLocalLog(LogEntry logEntry){
+    public void writeLocalLog(LogEntry logEntry){
+        reentrantLock.lock();
+
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"rw")){
             // 追加写入
             randomAccessFile.seek(logFile.length());
@@ -125,6 +137,8 @@ public class LogModule {
             setLastIndex(logEntry.getLogIndex());
         } catch (IOException e) {
             throw new MyRaftException("logModule writeLog error!",e);
+        } finally {
+            reentrantLock.unlock();
         }
     }
 
@@ -145,7 +159,7 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
      * */
-    public synchronized List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
+    public List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
         // 读取出来的时候是index从大到小排列的
         List<LogEntry> logEntryList = readLocalLogNoSort(logIndexStart,logIndexEnd);
 
@@ -165,69 +179,75 @@ public class LogModule {
                 "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
         }
 
-        // 链表效率高一点
-        List<LogEntry> logEntryList = new LinkedList<>();
-        try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
-            // 从后往前找
-            long offset = this.currentOffset;
+        reentrantLock.lock();
+        try {
+            // 链表效率高一点
+            List<LogEntry> logEntryList = new LinkedList<>();
+            try (RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile, "r")) {
+                // 从后往前找
+                long offset = this.currentOffset;
 
-            if(offset >= LONG_SIZE) {
-                // 跳转到最后一个记录的offset处
-                randomAccessFile.seek(offset - LONG_SIZE);
+                if (offset >= LONG_SIZE) {
+                    // 跳转到最后一个记录的offset处
+                    randomAccessFile.seek(offset - LONG_SIZE);
+                }
+
+                while (offset > 0) {
+                    // 获得记录的offset
+                    long entryOffset = randomAccessFile.readLong();
+                    // 跳转至对应位置
+                    randomAccessFile.seek(entryOffset);
+
+                    long targetLogIndex = randomAccessFile.readLong();
+                    if (targetLogIndex < logIndexStart) {
+                        // 从下向上找到的顺序，如果已经小于参数指定的了，说明日志里根本就没有需要的日志条目，直接返回null
+                        return logEntryList;
+                    }
+
+                    if (targetLogIndex <= logIndexEnd) {
+                        // 找到的符合要求
+                        logEntryList.add(readLocalLogByOffset(randomAccessFile, targetLogIndex));
+                    } else {
+                        // 不符合要求
+
+                        // 跳过一些
+                        randomAccessFile.readInt();
+                        int commandLength = randomAccessFile.readInt();
+                        randomAccessFile.read(new byte[commandLength]);
+                    }
+
+                    // preLogOffset
+                    offset = randomAccessFile.readLong();
+                    if (offset < LONG_SIZE) {
+                        // 整个文件都读完了
+                        return logEntryList;
+                    }
+
+                    // 跳转到记录的offset处
+                    randomAccessFile.seek(offset - LONG_SIZE);
+                }
+            } catch (IOException e) {
+                throw new MyRaftException("logModule readLog error!", e);
             }
 
-            while (offset > 0) {
-                // 获得记录的offset
-                long entryOffset = randomAccessFile.readLong();
-                // 跳转至对应位置
-                randomAccessFile.seek(entryOffset);
-
-                long targetLogIndex = randomAccessFile.readLong();
-                if(targetLogIndex < logIndexStart){
-                    // 从下向上找到的顺序，如果已经小于参数指定的了，说明日志里根本就没有需要的日志条目，直接返回null
-                    return logEntryList;
-                }
-
-                if(targetLogIndex <= logIndexEnd){
-                    // 找到的符合要求
-                    logEntryList.add(readLocalLogByOffset(randomAccessFile,targetLogIndex));
-                }else{
-                    // 不符合要求
-
-                    // 跳过一些
-                    randomAccessFile.readInt();
-                    int commandLength = randomAccessFile.readInt();
-                    randomAccessFile.read(new byte[commandLength]);
-                }
-
-                // preLogOffset
-                offset = randomAccessFile.readLong();
-                if(offset < LONG_SIZE){
-                    // 整个文件都读完了
-                    return logEntryList;
-                }
-
-                // 跳转到记录的offset处
-                randomAccessFile.seek(offset - LONG_SIZE);
-            }
-        } catch (IOException e) {
-            throw new MyRaftException("logModule readLog error!",e);
+            // 找遍了整个文件，也没找到，返回null
+            return logEntryList;
+        }finally {
+            reentrantLock.unlock();
         }
-
-        // 找遍了整个文件，也没找到，返回null
-        return logEntryList;
     }
 
     /**
      * 删除包括logIndex以及更大序号的所有日志
      * */
-    public synchronized void deleteLocalLog(long logIndexNeedDelete){
+    public void deleteLocalLog(long logIndexNeedDelete){
         // 已经确认提交的日志不能删除
         if(logIndexNeedDelete <= this.lastCommittedIndex){
             throw new MyRaftException("can not delete committed log! " +
                 "logIndexNeedDelete=" + logIndexNeedDelete + ",lastCommittedIndex=" + this.lastIndex);
         }
 
+        reentrantLock.lock();
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -271,13 +291,15 @@ public class LogModule {
             }
         } catch (IOException e) {
             throw new MyRaftException("logModule deleteLog error!",e);
+        } finally {
+            reentrantLock.unlock();
         }
     }
 
     /**
      * 向集群广播，令follower复制新的日志条目
      * */
-    public synchronized List<AppendEntriesRpcResult> replicationLogEntry(LogEntry lastEntry) {
+    public List<AppendEntriesRpcResult> replicationLogEntry(LogEntry lastEntry) {
         List<RaftService> otherNodeInCluster = currentServer.getOtherNodeInCluster();
 
         List<Future<AppendEntriesRpcResult>> futureList = new ArrayList<>(otherNodeInCluster.size());
@@ -285,6 +307,8 @@ public class LogModule {
         for(RaftService node : otherNodeInCluster){
             // 并行发送rpc，要求follower复制日志
             Future<AppendEntriesRpcResult> future = this.rpcThreadPool.submit(()->{
+                logger.info("replicationLogEntry start!");
+
                 long nextIndex = this.currentServer.getNextIndexMap().get(node);
 
                 AppendEntriesRpcResult finallyResult = null;
@@ -316,9 +340,9 @@ public class LogModule {
                         throw new MyRaftException("replicationLogEntry logEntryList size error!" + logEntryList.size());
                     }
 
-                    logger.info("leader do appendEntries, node={}, appendEntriesRpcParam={}",node,appendEntriesRpcParam);
+                    logger.info("leader do appendEntries start, node={}, appendEntriesRpcParam={}",node,appendEntriesRpcParam);
                     AppendEntriesRpcResult appendEntriesRpcResult = node.appendEntries(appendEntriesRpcParam);
-                    logger.info("leader do appendEntries, node={}, appendEntriesRpcResult={}",node,appendEntriesRpcResult);
+                    logger.info("leader do appendEntries end, node={}, appendEntriesRpcResult={}",node,appendEntriesRpcResult);
 
                     finallyResult = appendEntriesRpcResult;
                     // 收到更高任期的处理
@@ -328,6 +352,7 @@ public class LogModule {
                     }
 
                     if(appendEntriesRpcResult.isSuccess()){
+                        logger.info("appendEntriesRpcResult is success, node={}",node);
                         // 同步成功了，nextIndex递增一位
 
                         // If successful: update nextIndex and matchIndex for follower (§5.3)
@@ -336,6 +361,8 @@ public class LogModule {
                         this.currentServer.getMatchIndexMap().put(node,nextIndex);
                     }else{
                         // 因为日志对不上导致一致性检查没通过，同步没成功，nextIndex往后退一位
+
+                        logger.info("appendEntriesRpcResult is false, node={}",node);
 
                         // If AppendEntries fails because of log inconsistency: decrement nextIndex and retry (§5.3)
                         nextIndex--;
@@ -347,6 +374,8 @@ public class LogModule {
                     // 有bug
                     throw new MyRaftException("replicationLogEntry finallyResult is null!");
                 }
+
+                logger.info("finallyResult={},node={}",node,finallyResult);
 
                 return finallyResult;
             });
@@ -391,7 +420,7 @@ public class LogModule {
         this.lastCommittedIndex = lastCommittedIndex;
     }
 
-    public synchronized long getLastApplied() {
+    public long getLastApplied() {
         return lastApplied;
     }
 
@@ -414,7 +443,7 @@ public class LogModule {
         this.logMetaDataFileOriginal.delete();
     }
 
-    private synchronized LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
+    private LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
         LogEntry logEntry = new LogEntry();
         logEntry.setLogIndex(logIndex);
         logEntry.setLogTerm(randomAccessFile.readInt());
@@ -430,7 +459,7 @@ public class LogModule {
         return logEntry;
     }
 
-    private synchronized void refreshMetadata() throws IOException {
+    private void refreshMetadata() throws IOException {
         this.logMetaDataFile.seek(0);
         this.logMetaDataFile.writeLong(this.currentOffset);
     }

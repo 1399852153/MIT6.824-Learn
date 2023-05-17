@@ -85,13 +85,8 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             requestVoteRpcParam.setCandidateId(currentServer.getServerId());
 
             LogEntry lastLogEntry = currentServer.getLogModule().getLastLogEntry();
-            if(lastLogEntry != null){
-                requestVoteRpcParam.setLastLogTerm(lastLogEntry.getLogTerm());
-                requestVoteRpcParam.setLastLogIndex(lastLogEntry.getLogIndex());
-            }else{
-                requestVoteRpcParam.setLastLogTerm(-1);
-                requestVoteRpcParam.setLastLogIndex(-1);
-            }
+            requestVoteRpcParam.setLastLogTerm(lastLogEntry.getLogTerm());
+            requestVoteRpcParam.setLastLogIndex(lastLogEntry.getLogIndex());
 
             for(RaftService node : otherNodeInCluster){
                 Future<RequestVoteRpcResult> future = raftLeaderElectionModule.getRpcThreadPool().submit(

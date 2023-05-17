@@ -63,13 +63,9 @@ public class HeartBeatBroadcastTask implements Runnable{
         appendEntriesRpcParam.setLeaderId(currentServer.getServerId());
 
         LogEntry lastLogEntry = currentServer.getLogModule().getLastLogEntry();
-        if(lastLogEntry != null){
-            appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
-            appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
-        }else{
-            appendEntriesRpcParam.setPrevLogTerm(-1);
-            appendEntriesRpcParam.setPrevLogIndex(-1);
-        }
+        appendEntriesRpcParam.setPrevLogTerm(lastLogEntry.getLogTerm());
+        appendEntriesRpcParam.setPrevLogIndex(lastLogEntry.getLogIndex());
+
         appendEntriesRpcParam.setLeaderCommit(currentServer.getLogModule().getLastCommittedIndex());
 
         // todo 补上日志复制

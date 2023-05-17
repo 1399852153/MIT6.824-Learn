@@ -46,6 +46,14 @@ public class LogEntry {
         this.command = command;
     }
 
+    public static LogEntry getEmptyLogEntry(){
+        LogEntry logEntry = new LogEntry();
+        logEntry.setLogTerm(-1);
+        logEntry.setLogIndex(-1);
+
+        return logEntry;
+    }
+
     @Override
     public String toString() {
         return "LogEntry{" +

@@ -106,7 +106,7 @@ public class RaftServer implements RaftService {
     }
 
     @Override
-    public synchronized RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
+    public RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
         RequestVoteRpcResult requestVoteRpcResult = raftLeaderElectionModule.requestVoteProcess(requestVoteRpcParam);
 
         processCommunicationHigherTerm(requestVoteRpcParam.getTerm());
@@ -118,7 +118,7 @@ public class RaftServer implements RaftService {
     }
 
     @Override
-    public synchronized AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
+    public AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam) {
         AppendEntriesRpcResult appendEntriesRpcResult = doAppendEntries(appendEntriesRpcParam);
 
         processCommunicationHigherTerm(appendEntriesRpcParam.getTerm());
@@ -135,7 +135,7 @@ public class RaftServer implements RaftService {
     }
 
     @Override
-    public synchronized ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
+    public ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
         // 不是leader
         if(this.serverStatusEnum != ServerStatusEnum.LEADER){
             if(this.currentLeader == null){

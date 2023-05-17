@@ -21,11 +21,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class LogModule {
 
@@ -62,7 +59,9 @@ public class LogModule {
 
     private final RaftServer currentServer;
 
-    private final ReentrantLock reentrantLock = new ReentrantLock();
+    private final ReentrantReadWriteLock reentrantLock = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
+    private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
 
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
@@ -71,7 +70,8 @@ public class LogModule {
 
         int threadPoolSize = Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2;
         logger.info("LogModule threadPoolSize={}",threadPoolSize);
-        this.rpcThreadPool = Executors.newFixedThreadPool(threadPoolSize);
+        this.rpcThreadPool = new ThreadPoolExecutor(threadPoolSize, threadPoolSize,
+            0L, TimeUnit.MILLISECONDS, new SynchronousQueue<>());
 
         String userPath = System.getProperty("user.dir") + File.separator + serverId;
 
@@ -113,7 +113,11 @@ public class LogModule {
      * 按照顺序追加写入日志
      * */
     public void writeLocalLog(LogEntry logEntry){
-        reentrantLock.lock();
+        boolean lockSuccess = writeLock.tryLock();
+        if(!lockSuccess){
+            logger.error("writeLocalLog lock error!");
+            return;
+        }
 
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"rw")){
             // 追加写入
@@ -138,7 +142,7 @@ public class LogModule {
         } catch (IOException e) {
             throw new MyRaftException("logModule writeLog error!",e);
         } finally {
-            reentrantLock.unlock();
+            writeLock.unlock();
         }
     }
 
@@ -179,7 +183,11 @@ public class LogModule {
                 "logIndexStart=" + logIndexStart + " logIndexEnd=" + logIndexEnd);
         }
 
-        reentrantLock.lock();
+        boolean lockSuccess = readLock.tryLock();
+        if(!lockSuccess){
+            throw new MyRaftException("readLocalLogNoSort lock error!");
+        }
+
         try {
             // 链表效率高一点
             List<LogEntry> logEntryList = new LinkedList<>();
@@ -233,7 +241,7 @@ public class LogModule {
             // 找遍了整个文件，也没找到，返回null
             return logEntryList;
         }finally {
-            reentrantLock.unlock();
+            readLock.unlock();
         }
     }
 
@@ -247,7 +255,12 @@ public class LogModule {
                 "logIndexNeedDelete=" + logIndexNeedDelete + ",lastCommittedIndex=" + this.lastIndex);
         }
 
-        reentrantLock.lock();
+        boolean lockSuccess = writeLock.tryLock();
+        if(!lockSuccess){
+            logger.error("deleteLocalLog lock error!");
+            return;
+        }
+
         try(RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile,"r")) {
             // 从后往前找
             long offset = this.currentOffset;
@@ -292,7 +305,7 @@ public class LogModule {
         } catch (IOException e) {
             throw new MyRaftException("logModule deleteLog error!",e);
         } finally {
-            reentrantLock.unlock();
+            writeLock.unlock();
         }
     }
 
@@ -356,9 +369,11 @@ public class LogModule {
                         // 同步成功了，nextIndex递增一位
 
                         // If successful: update nextIndex and matchIndex for follower (§5.3)
-                        nextIndex++;
-                        this.currentServer.getNextIndexMap().put(node,nextIndex);
+
+                        this.currentServer.getNextIndexMap().put(node,nextIndex+1);
                         this.currentServer.getMatchIndexMap().put(node,nextIndex);
+
+                        nextIndex++;
                     }else{
                         // 因为日志对不上导致一致性检查没通过，同步没成功，nextIndex往后退一位
 
@@ -394,7 +409,12 @@ public class LogModule {
     }
 
     public LogEntry getLastLogEntry(){
-        return readLocalLog(this.lastIndex);
+        LogEntry lastLogEntry = readLocalLog(this.lastIndex);
+        if(lastLogEntry != null){
+            return lastLogEntry;
+        }else {
+            return LogEntry.getEmptyLogEntry();
+        }
     }
 
     // ============================= get/set ========================================
@@ -403,7 +423,7 @@ public class LogModule {
         return lastIndex;
     }
 
-    public synchronized void setLastIndex(long lastIndex) {
+    public void setLastIndex(long lastIndex) {
         this.lastIndex = lastIndex;
     }
 
@@ -411,7 +431,7 @@ public class LogModule {
         return lastCommittedIndex;
     }
 
-    public synchronized void setLastCommittedIndex(long lastCommittedIndex) {
+    public void setLastCommittedIndex(long lastCommittedIndex) {
         if(lastCommittedIndex < this.lastCommittedIndex){
             throw new MyRaftException("set lastCommittedIndex error this.lastCommittedIndex=" + this.lastCommittedIndex
                     + " lastCommittedIndex=" + lastCommittedIndex);
@@ -424,7 +444,7 @@ public class LogModule {
         return lastApplied;
     }
 
-    public synchronized void setLastApplied(long lastApplied) {
+    public void setLastApplied(long lastApplied) {
         if(lastApplied < this.lastApplied){
             throw new MyRaftException("set lastApplied error this.lastApplied=" + this.lastApplied
                 + " lastApplied=" + lastApplied);

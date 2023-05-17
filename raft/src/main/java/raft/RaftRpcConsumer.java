@@ -27,10 +27,7 @@ public class RaftRpcConsumer implements RaftService {
     public RequestVoteRpcResult requestVote(RequestVoteRpcParam requestVoteRpcParam) {
         // 强制指定rpc目标的ip/port
         setTargetProviderUrl();
-        long start = System.currentTimeMillis();
         RequestVoteRpcResult result = raftServiceProxy.requestVote(requestVoteRpcParam);
-        long end = System.currentTimeMillis();
-        logger.info("requestVote request cost targetUrl={},{}ms",targetNodeConfig,(end-start));
         return result;
     }
 

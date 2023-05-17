@@ -3,6 +3,7 @@ package raft.module;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
+import raft.api.model.LogEntry;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
 import raft.task.HeartBeatTimeoutCheckTask;
@@ -62,7 +63,7 @@ public class RaftLeaderElectionModule {
      * 处理投票请求
      * 注意：synchronized修饰防止不同candidate并发的投票申请处理，以FIFO的方式处理
      * */
-    public synchronized RequestVoteRpcResult requestVoteProcess(RequestVoteRpcParam requestVoteRpcParam){
+    public RequestVoteRpcResult requestVoteProcess(RequestVoteRpcParam requestVoteRpcParam){
         if(this.currentServer.getCurrentTerm() > requestVoteRpcParam.getTerm()){
             // Reply false if term < currentTerm (§5.1)
             // 发起投票的candidate任期小于当前服务器任期，拒绝投票给它
@@ -78,7 +79,26 @@ public class RaftLeaderElectionModule {
             return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),false);
         }
 
-        // todo 先不考虑日志条目索引以及任期值是否满足条件的情况
+        // 考虑日志条目索引以及任期值是否满足条件的情况（第5.4节中提到的安全性）
+        // 保证leader必须拥有所有已提交的日志，即发起投票的candidate日志一定要比投票给它的节点更新
+        LogEntry lastLogEntry = currentServer.getLogModule().getLastLogEntry();
+        if(lastLogEntry.getLogTerm() > requestVoteRpcParam.getLastLogTerm()){
+            // If the logs have last entries with different terms, then the log with the later term is more up-to-date.
+            // 当前节点的last日志任期比发起投票的candidate更高(比candidate更新)，不投票给它
+            logger.info("lastLogEntry.term > candidate.lastLogTerm! voteGranted=false");
+            return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),false);
+        }else if(lastLogEntry.getLogTerm() == requestVoteRpcParam.getLastLogTerm() &&
+            lastLogEntry.getLogIndex() > requestVoteRpcParam.getLastLogIndex()){
+            // If the logs end with the same term, then whichever log is longer is more up-to-date.
+            // 当前节点的last日志和发起投票的candidate任期一样，但是index比candidate的高(比candidate更新)，不投票给它
+
+            logger.info("lastLogEntry.term == candidate.lastLogTerm && " +
+                "lastLogEntry.index > candidate.lastLogIndex! voteGranted=false");
+            return new RequestVoteRpcResult(this.currentServer.getCurrentTerm(),false);
+        }else{
+            // candidate的日志至少与当前节点一样新(或者更新)，通过检查，可以投票给它
+            logger.info("candidate log at least as new as the current node, valid passed!");
+        }
 
         // 设置投票给了谁
         this.currentServer.setVotedFor(requestVoteRpcParam.getCandidateId());

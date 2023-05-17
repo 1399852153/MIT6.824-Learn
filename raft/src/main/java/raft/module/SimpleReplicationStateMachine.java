@@ -5,14 +5,12 @@ import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import raft.RaftServer;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
 import raft.util.MyRaftFileUtil;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 简易复制状态机(持久化到磁盘中的最基础的k/v数据库)
@@ -21,7 +19,7 @@ import java.util.Map;
 public class SimpleReplicationStateMachine implements KVReplicationStateMachine {
     private static final Logger logger = LoggerFactory.getLogger(SimpleReplicationStateMachine.class);
 
-    private final Map<String,String> kvMap;
+    private final ConcurrentHashMap<String,String> kvMap;
 
     private final File persistenceFile;
 
@@ -33,14 +31,14 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
 
         String fileContent = MyRaftFileUtil.getFileContent(persistenceFile);
         if(StringUtils.hasText(fileContent)){
-            kvMap = JsonUtil.json2Obj(fileContent,new TypeReference<Map<String,String>>(){});
+            kvMap = JsonUtil.json2Obj(fileContent,new TypeReference<ConcurrentHashMap<String,String>>(){});
         }else{
-            kvMap = new HashMap<>();
+            kvMap = new ConcurrentHashMap<>();
         }
     }
 
     @Override
-    public synchronized void apply(SetCommand setCommand) {
+    public void apply(SetCommand setCommand) {
         logger.info("apply setCommand start,{}",setCommand);
         kvMap.put(setCommand.getKey(),setCommand.getValue());
 
@@ -50,7 +48,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     }
 
     @Override
-    public synchronized String get(String key) {
+    public String get(String key) {
         return kvMap.get(key);
     }
 

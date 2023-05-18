@@ -26,5 +26,8 @@ public class RpcClientTest {
             String result = raftClient.doRequest(new GetCommand("k2"));
             Assert.assertEquals(result, "v2");
         }
+
+        System.out.println("all finished!");
+
     }
 }

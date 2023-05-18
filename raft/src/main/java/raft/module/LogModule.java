@@ -101,7 +101,7 @@ public class LogModule {
                 // 跳转至对应位置
                 randomAccessFile.seek(entryOffset);
 
-                this.lastIndex = randomAccessFile.readInt();
+                this.lastIndex = randomAccessFile.readLong();
             }else{
                 // 之前的日志为空，lastIndex初始化为-1
                 this.lastIndex = -1;
@@ -350,7 +350,8 @@ public class LogModule {
                         appendEntriesRpcParam.setPrevLogTerm(-1);
                     }else{
                         // 日志长度不是1也不是2，日志模块有bug
-                        throw new MyRaftException("replicationLogEntry logEntryList size error!" + logEntryList.size());
+                        throw new MyRaftException("replicationLogEntry logEntryList size error!" +
+                            " nextIndex=" + nextIndex + " logEntryList.size=" + logEntryList.size());
                     }
 
                     logger.info("leader do appendEntries start, node={}, appendEntriesRpcParam={}",node,appendEntriesRpcParam);

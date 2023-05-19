@@ -5,6 +5,7 @@ import myrpc.common.StringUtils;
 import myrpc.serialize.json.JsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import raft.api.command.EmptySetCommand;
 import raft.api.command.SetCommand;
 import raft.module.api.KVReplicationStateMachine;
 import raft.util.MyRaftFileUtil;
@@ -39,6 +40,12 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
 
     @Override
     public void apply(SetCommand setCommand) {
+        if(setCommand instanceof EmptySetCommand){
+            // no-op，状态机无需做任何操作
+            logger.info("apply EmptySetCommand quick return!");
+            return;
+        }
+
         logger.info("apply setCommand start,{}",setCommand);
         kvMap.put(setCommand.getKey(),setCommand.getValue());
 

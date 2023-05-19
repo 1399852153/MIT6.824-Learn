@@ -16,6 +16,7 @@ import raft.module.RaftHeartBeatBroadcastModule;
 import raft.module.RaftLeaderElectionModule;
 import raft.module.SimpleReplicationStateMachine;
 import raft.module.api.KVReplicationStateMachine;
+import raft.task.HeartBeatBroadcastTask;
 import raft.util.CollectionUtil;
 
 import java.io.IOException;
@@ -135,7 +136,7 @@ public class RaftServer implements RaftService {
     }
 
     @Override
-    public ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
+    public synchronized ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
         // 不是leader
         if(this.serverStatusEnum != ServerStatusEnum.LEADER){
             if(this.currentLeader == null){
@@ -156,18 +157,29 @@ public class RaftServer implements RaftService {
 
         // 是leader，处理读请求
         if(clientRequestParam.getCommand() instanceof GetCommand){
-            GetCommand getCommand = (GetCommand) clientRequestParam.getCommand();
+            // 进行一次心跳广播，判断当前自己是否还是leader
+            boolean stillBeLeader = HeartBeatBroadcastTask.doHeartBeatBroadcast(this);
+            if(stillBeLeader){
+                // 还是leader，可以响应客户端
+                logger.info("do client read op, still be leader");
 
-            // 直接从状态机中读取就行
-            String value = this.kvReplicationStateMachine.get(getCommand.getKey());
+                // Read-only operations can be handled without writing anything into the log.
+                GetCommand getCommand = (GetCommand) clientRequestParam.getCommand();
 
-            ClientRequestResult clientRequestResult = new ClientRequestResult();
-            clientRequestResult.setSuccess(true);
-            clientRequestResult.setValue(value);
+                // 直接从状态机中读取就行
+                String value = this.kvReplicationStateMachine.get(getCommand.getKey());
 
-            logger.info("response getCommand, result={}",clientRequestResult);
+                ClientRequestResult clientRequestResult = new ClientRequestResult();
+                clientRequestResult.setSuccess(true);
+                clientRequestResult.setValue(value);
 
-            return clientRequestResult;
+                logger.info("response getCommand, result={}",clientRequestResult);
+
+                return clientRequestResult;
+            }else{
+                // 广播后发现自己不再是leader了，报错，让客户端重新自己找leader (客户端和当前节点同时误判，小概率发生)
+                throw new MyRaftException("do client read op, but not still be leader!" + this.serverId);
+            }
         }
 
         // 自己是leader，需要处理客户端的写请求
@@ -296,7 +308,6 @@ public class RaftServer implements RaftService {
             // 本地日志不存在，追加写入
             // Append any new entries not already in the log
             logModule.writeLocalLog(newLogEntry);
-
 
             logger.info("doAppendEntries localEntry not exist, append log");
 

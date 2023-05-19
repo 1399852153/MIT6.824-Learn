@@ -138,7 +138,7 @@ public class LogModule {
             refreshMetadata();
 
             // 设置最后写入的索引编号，lastIndex
-            setLastIndex(logEntry.getLogIndex());
+            this.lastIndex = logEntry.getLogIndex();
         } catch (IOException e) {
             throw new MyRaftException("logModule writeLog error!",e);
         } finally {
@@ -150,12 +150,18 @@ public class LogModule {
      * 根据日志索引号，获得对应的日志记录
      * */
     public LogEntry readLocalLog(long logIndex) {
-        List<LogEntry> logEntryList = readLocalLogNoSort(logIndex,logIndex);
-        if(logEntryList.isEmpty()){
-            return null;
-        }else{
-            // 只会有1个
-            return logEntryList.get(0);
+        readLock.lock();
+
+        try {
+            List<LogEntry> logEntryList = readLocalLogNoSort(logIndex, logIndex);
+            if (logEntryList.isEmpty()) {
+                return null;
+            } else {
+                // 只会有1个
+                return logEntryList.get(0);
+            }
+        }finally {
+            readLock.unlock();
         }
     }
 
@@ -164,13 +170,19 @@ public class LogModule {
      * 左右闭区间（logIndexStart <= {index} <= logIndexEnd）
      * */
     public List<LogEntry> readLocalLog(long logIndexStart, long logIndexEnd) {
-        // 读取出来的时候是index从大到小排列的
-        List<LogEntry> logEntryList = readLocalLogNoSort(logIndexStart,logIndexEnd);
+        readLock.lock();
 
-        // 翻转一下，令其按index从小到大排列
-        Collections.reverse(logEntryList);
+        try {
+            // 读取出来的时候是index从大到小排列的
+            List<LogEntry> logEntryList = readLocalLogNoSort(logIndexStart, logIndexEnd);
 
-        return logEntryList;
+            // 翻转一下，令其按index从小到大排列
+            Collections.reverse(logEntryList);
+
+            return logEntryList;
+        }finally {
+            readLock.unlock();
+        }
     }
 
     /**
@@ -424,21 +436,23 @@ public class LogModule {
         return lastIndex;
     }
 
-    public void setLastIndex(long lastIndex) {
-        this.lastIndex = lastIndex;
-    }
-
     public long getLastCommittedIndex() {
         return lastCommittedIndex;
     }
 
     public void setLastCommittedIndex(long lastCommittedIndex) {
-        if(lastCommittedIndex < this.lastCommittedIndex){
-            throw new MyRaftException("set lastCommittedIndex error this.lastCommittedIndex=" + this.lastCommittedIndex
-                    + " lastCommittedIndex=" + lastCommittedIndex);
-        }
+        writeLock.lock();
 
-        this.lastCommittedIndex = lastCommittedIndex;
+        try {
+            if (lastCommittedIndex < this.lastCommittedIndex) {
+                throw new MyRaftException("set lastCommittedIndex error this.lastCommittedIndex=" + this.lastCommittedIndex
+                    + " lastCommittedIndex=" + lastCommittedIndex);
+            }
+
+            this.lastCommittedIndex = lastCommittedIndex;
+        }finally {
+            writeLock.unlock();
+        }
     }
 
     public long getLastApplied() {
@@ -446,12 +460,18 @@ public class LogModule {
     }
 
     public void setLastApplied(long lastApplied) {
-        if(lastApplied < this.lastApplied){
-            throw new MyRaftException("set lastApplied error this.lastApplied=" + this.lastApplied
-                + " lastApplied=" + lastApplied);
-        }
+        writeLock.lock();
 
-        this.lastApplied = lastApplied;
+        try {
+            if (lastApplied < this.lastApplied) {
+                throw new MyRaftException("set lastApplied error this.lastApplied=" + this.lastApplied
+                    + " lastApplied=" + lastApplied);
+            }
+
+            this.lastApplied = lastApplied;
+        }finally {
+            writeLock.unlock();
+        }
     }
 
     /**

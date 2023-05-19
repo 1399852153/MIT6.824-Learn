@@ -3,6 +3,8 @@ package raft.task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
+import raft.api.command.EmptySetCommand;
+import raft.api.model.ClientRequestParam;
 import raft.api.model.LogEntry;
 import raft.api.model.RequestVoteRpcParam;
 import raft.api.model.RequestVoteRpcResult;
@@ -152,5 +154,9 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
             // for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
             this.currentServer.getMatchIndexMap().put(otherService,0L);
         }
+
+        // 成为leader后再发起一次no-op的日志复制操作，获得nextIndexMap和matchIndexMap的最新值
+        // Raft handles this by having each leader commit a blank _no-op_ entry into the log at the start of its term.
+        currentServer.clientRequest(new ClientRequestParam(new EmptySetCommand()));
     }
 }

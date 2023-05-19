@@ -9,10 +9,12 @@ import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
 import raft.common.enums.ServerStatusEnum;
 import raft.module.RaftHeartBeatBroadcastModule;
+import raft.util.CommonUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * leader心跳广播任务
@@ -46,7 +48,11 @@ public class HeartBeatBroadcastTask implements Runnable{
 //        logger.info("do HeartBeatBroadcast end {}",currentServer.getServerId());
     }
 
-    public static void doHeartBeatBroadcast(RaftServer currentServer){
+    /**
+     * 做心跳广播
+     * @return 是否大多数节点依然认为自己是leader
+     * */
+    public static boolean doHeartBeatBroadcast(RaftServer currentServer){
 //        logger.info("do HeartBeatBroadcast start {}",currentServer.getServerId());
 
         // 先刷新自己的心跳时间
@@ -68,7 +74,6 @@ public class HeartBeatBroadcastTask implements Runnable{
 
         appendEntriesRpcParam.setLeaderCommit(currentServer.getLogModule().getLastCommittedIndex());
 
-        // todo 补上日志复制
         for(RaftService node : otherNodeInCluster){
             Future<AppendEntriesRpcResult> future = currentServer.getRaftHeartBeatBroadcastModule().getRpcThreadPool().submit(
                 ()-> {
@@ -79,6 +84,20 @@ public class HeartBeatBroadcastTask implements Runnable{
             );
 
             futureList.add(future);
+        }
+
+        List<AppendEntriesRpcResult> appendEntriesRpcResultList = CommonUtil.concurrentGetRpcFutureResult("doHeartBeatBroadcast",futureList,
+            currentServer.getRaftHeartBeatBroadcastModule().getRpcThreadPool(),1, TimeUnit.SECONDS);
+
+        // 通知成功的数量(+1包括自己)
+        int successResponseCount = (int) (appendEntriesRpcResultList.stream().filter(AppendEntriesRpcResult::isSuccess).count() + 1);
+        if(successResponseCount >= currentServer.getRaftConfig().getMajorityNum()
+            && currentServer.getServerStatusEnum() == ServerStatusEnum.LEADER){
+            // 大多数节点依然认为自己是leader,并且广播的节点中没有人任期高于当前节点，让当前节点主动让位
+            return true;
+        }else{
+            // 大多数节点不认为自己是leader（包括广播超时等未接到响应的场景，也认为是广播失败）
+            return false;
         }
     }
 

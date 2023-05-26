@@ -63,6 +63,12 @@ public class LogModule {
     private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
     private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
 
+    /**
+     * todo 启动一个定时任务，检查日志文件是否超过阈值。
+     * 如果超过了，则找状态机获得一份快照（写入快照文件中），然后删除已提交的日志(加写锁，把当前未提交的日志列表读取出来写到一份新的文件里，令日志文件为新生成的文件)
+     * 如果在这个过程中宕机了应该怎么处理？
+     * */
+
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
 
@@ -360,8 +366,12 @@ public class LogModule {
                         // 第一条记录的prev的index和term都是-1
                         appendEntriesRpcParam.setPrevLogIndex(-1);
                         appendEntriesRpcParam.setPrevLogTerm(-1);
+                    }else if(logEntryList.isEmpty()){
+                        logger.info("can not find");
+                        // 快照压缩导致leader更早的index日志已经不存在了
+                        // 应该改为使用installSnapshot来同步进度
                     }else{
-                        // 日志长度不是1也不是2，日志模块有bug
+                        // 日志长度不符合预期，日志模块有bug
                         throw new MyRaftException("replicationLogEntry logEntryList size error!" +
                             " nextIndex=" + nextIndex + " logEntryList.size=" + logEntryList.size());
                     }

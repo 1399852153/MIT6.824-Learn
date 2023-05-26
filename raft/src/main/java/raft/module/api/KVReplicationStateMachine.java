@@ -17,4 +17,15 @@ public interface KVReplicationStateMachine {
      * 简单起见，直接提供一个读的方法，而不是另外用别的模块来做
      * */
     String get(String key);
+
+    /**
+     * 安装快照
+     * */
+    void installSnapshot(byte[] snapshot);
+
+    /**
+     * 构建并返回当前状态机快照
+     * */
+    byte[] buildSnapshot();
+
 }

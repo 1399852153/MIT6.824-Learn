@@ -11,6 +11,7 @@ import raft.module.api.KVReplicationStateMachine;
 import raft.util.MyRaftFileUtil;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SimpleReplicationStateMachine implements KVReplicationStateMachine {
     private static final Logger logger = LoggerFactory.getLogger(SimpleReplicationStateMachine.class);
 
-    private final ConcurrentHashMap<String,String> kvMap;
+    private volatile ConcurrentHashMap<String,String> kvMap;
 
     private final File persistenceFile;
 
@@ -57,6 +58,18 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     @Override
     public String get(String key) {
         return kvMap.get(key);
+    }
+
+    @Override
+    public void installSnapshot(byte[] snapshot) {
+        String mapJson = new String(snapshot,StandardCharsets.UTF_8);
+        this.kvMap = JsonUtil.json2Obj(mapJson, new TypeReference<ConcurrentHashMap<String, String>>() {});
+    }
+
+    @Override
+    public byte[] buildSnapshot() {
+        String mapJson = JsonUtil.obj2Str(kvMap);
+        return mapJson.getBytes(StandardCharsets.UTF_8);
     }
 
     /**

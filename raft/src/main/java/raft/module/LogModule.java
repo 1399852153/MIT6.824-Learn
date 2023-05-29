@@ -9,6 +9,7 @@ import raft.api.model.AppendEntriesRpcParam;
 import raft.api.model.AppendEntriesRpcResult;
 import raft.api.model.LogEntry;
 import raft.api.service.RaftService;
+import raft.common.model.RaftSnapshot;
 import raft.exception.MyRaftException;
 import raft.util.CommonUtil;
 import raft.util.MyRaftFileUtil;
@@ -122,8 +123,7 @@ public class LogModule {
                 return;
             }
 
-
-
+            buildSnapshotCheck();
         },10,10,TimeUnit.SECONDS);
     }
 
@@ -525,5 +525,42 @@ public class LogModule {
     private void refreshMetadata() throws IOException {
         this.logMetaDataFile.seek(0);
         this.logMetaDataFile.writeLong(this.currentOffset);
+    }
+
+    private void buildSnapshotCheck() {
+        try {
+            if(readLock.tryLock(1,TimeUnit.SECONDS)){
+                return;
+            }
+        } catch (InterruptedException e) {
+            throw new MyRaftException("buildSnapshotCheck error!",e);
+        }
+
+        try {
+            long logFileLength = this.logFile.length();
+            long logFileThreshold = currentServer.getRaftConfig().getLogFileThreshold();
+            if (logFileLength < logFileThreshold) {
+                logger.info("logFileLength not reach threshold, do nothing. logFileLength={},threshold={}", logFileLength, logFileThreshold);
+                return;
+            }
+
+            logger.info("logFileLength already reach threshold, start buildSnapshot! logFileLength={},threshold={}", logFileLength, logFileThreshold);
+
+            byte[] snapshot = currentServer.getKvReplicationStateMachine().buildSnapshot();
+            LogEntry lastCommittedLogEntry = readLocalLog(this.lastCommittedIndex);
+
+            RaftSnapshot raftSnapshot = new RaftSnapshot();
+            raftSnapshot.setLastIncludedTerm(lastCommittedLogEntry.getLogTerm());
+            raftSnapshot.setLastIncludedIndex(lastCommittedLogEntry.getLogIndex());
+            raftSnapshot.setSnapshotData(snapshot);
+
+            // 持久化最新的一份快照
+            currentServer.getSnapshotModule().persistentNewSnapshotFile(raftSnapshot);
+
+            // 删除掉日志文件中lastCommittedIndex之前的所有日志
+
+        }finally {
+            readLock.unlock();
+        }
     }
 }

@@ -49,6 +49,11 @@ public class RaftClusterGlobalConfig {
     public static final int leaderAutoFailCount = 0;
 
     /**
+     * 当日志超过这个阈值时，就会生成快照文件(单位：byte字节)
+     * */
+    public static final int logFileThreshold = 512;
+
+    /**
      * 随机化的选举超时时间
      * */
     public static final Range<Integer> electionTimeoutRandomRange = new Range<>(150,500);
@@ -69,6 +74,7 @@ public class RaftClusterGlobalConfig {
         raftConfig.setLeaderAutoFailCount(RaftClusterGlobalConfig.leaderAutoFailCount);
         // 随机化选举超时时间的范围
         raftConfig.setElectionTimeoutRandomRange(RaftClusterGlobalConfig.electionTimeoutRandomRange);
+        raftConfig.setLogFileThreshold(RaftClusterGlobalConfig.logFileThreshold);
 
         RaftRpcServer raftRpcServer = new RaftRpcServer(
             raftConfig, RaftClusterGlobalConfig.registry);

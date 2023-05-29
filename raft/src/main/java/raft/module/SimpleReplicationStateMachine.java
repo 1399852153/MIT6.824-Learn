@@ -13,6 +13,7 @@ import raft.util.MyRaftFileUtil;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * 简易复制状态机(持久化到磁盘中的最基础的k/v数据库)
@@ -24,6 +25,10 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
     private volatile ConcurrentHashMap<String,String> kvMap;
 
     private final File persistenceFile;
+
+    private final ReentrantReadWriteLock reentrantLock = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
+    private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
 
     public SimpleReplicationStateMachine(int serverId){
         String userPath = System.getProperty("user.dir") + File.separator + serverId;
@@ -48,28 +53,51 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
         }
 
         logger.info("apply setCommand start,{}",setCommand);
-        kvMap.put(setCommand.getKey(),setCommand.getValue());
+        writeLock.lock();
+        try {
+            kvMap.put(setCommand.getKey(), setCommand.getValue());
 
-        // 每次写操作完都持久化一遍(简单起见，暂时不考虑性能问题)
-        MyRaftFileUtil.writeInFile(persistenceFile,JsonUtil.obj2Str(kvMap));
-        logger.info("apply setCommand end");
+            // 每次写操作完都持久化一遍(简单起见，暂时不考虑性能问题)
+            MyRaftFileUtil.writeInFile(persistenceFile, JsonUtil.obj2Str(kvMap));
+            logger.info("apply setCommand end");
+        }finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public String get(String key) {
-        return kvMap.get(key);
+        readLock.lock();
+
+        try {
+            return kvMap.get(key);
+        }finally {
+            readLock.unlock();
+        }
     }
 
     @Override
     public void installSnapshot(byte[] snapshot) {
-        String mapJson = new String(snapshot,StandardCharsets.UTF_8);
-        this.kvMap = JsonUtil.json2Obj(mapJson, new TypeReference<ConcurrentHashMap<String, String>>() {});
+        writeLock.lock();
+
+        try {
+            String mapJson = new String(snapshot, StandardCharsets.UTF_8);
+            this.kvMap = JsonUtil.json2Obj(mapJson, new TypeReference<ConcurrentHashMap<String, String>>() {});
+        }finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
     public byte[] buildSnapshot() {
-        String mapJson = JsonUtil.obj2Str(kvMap);
-        return mapJson.getBytes(StandardCharsets.UTF_8);
+        readLock.lock();
+
+        try {
+            String mapJson = JsonUtil.obj2Str(kvMap);
+            return mapJson.getBytes(StandardCharsets.UTF_8);
+        }finally {
+            readLock.unlock();
+        }
     }
 
     /**

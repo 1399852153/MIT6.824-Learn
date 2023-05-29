@@ -63,11 +63,7 @@ public class LogModule {
     private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
     private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
 
-    /**
-     * todo 启动一个定时任务，检查日志文件是否超过阈值。
-     * 如果超过了，则找状态机获得一份快照（写入快照文件中），然后删除已提交的日志(加写锁，把当前未提交的日志列表读取出来写到一份新的文件里，令日志文件为新生成的文件)
-     * 如果在这个过程中宕机了应该怎么处理？
-     * */
+    private final ScheduledExecutorService scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
 
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
@@ -113,6 +109,22 @@ public class LogModule {
                 this.lastIndex = -1;
             }
         }
+
+        /**
+         * todo 启动一个定时任务，检查日志文件是否超过阈值。
+         * 如果超过了，则找状态机获得一份快照（写入快照文件中），然后删除已提交的日志(加写锁，把当前未提交的日志列表读取出来写到一份新的文件里，令日志文件为新生成的文件)
+         * 如果在这个过程中宕机了应该怎么处理？
+         * */
+        // 为了测试时更快看到效果，10秒就检查一下
+        scheduledExecutorService.scheduleWithFixedDelay(()->{
+            if(currentServer.getRaftConfig().getLogFileThreshold() <= 0){
+                // 相当于没配置，不生成快照
+                return;
+            }
+
+
+
+        },10,10,TimeUnit.SECONDS);
     }
 
     /**

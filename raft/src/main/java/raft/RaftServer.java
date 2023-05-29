@@ -11,10 +11,7 @@ import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
 import raft.api.service.RaftService;
 import raft.exception.MyRaftException;
-import raft.module.LogModule;
-import raft.module.RaftHeartBeatBroadcastModule;
-import raft.module.RaftLeaderElectionModule;
-import raft.module.SimpleReplicationStateMachine;
+import raft.module.*;
 import raft.module.api.KVReplicationStateMachine;
 import raft.task.HeartBeatBroadcastTask;
 import raft.util.CollectionUtil;
@@ -66,6 +63,7 @@ public class RaftServer implements RaftService {
     protected List<RaftService> otherNodeInCluster;
 
     private LogModule logModule;
+    private SnapshotModule snapshotModule;
     private RaftLeaderElectionModule raftLeaderElectionModule;
     private RaftHeartBeatBroadcastModule raftHeartBeatBroadcastModule;
     private KVReplicationStateMachine kvReplicationStateMachine;
@@ -95,6 +93,7 @@ public class RaftServer implements RaftService {
 
         try {
             logModule = new LogModule(this);
+            snapshotModule = new SnapshotModule(this);
         } catch (IOException e) {
             throw new MyRaftException("init LogModule error!",e);
         }
@@ -428,6 +427,14 @@ public class RaftServer implements RaftService {
 
     public LogModule getLogModule() {
         return logModule;
+    }
+
+    public SnapshotModule getSnapshotModule() {
+        return snapshotModule;
+    }
+
+    public KVReplicationStateMachine getKvReplicationStateMachine() {
+        return kvReplicationStateMachine;
     }
 
     public Map<RaftService, Long> getNextIndexMap() {

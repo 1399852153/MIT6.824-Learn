@@ -54,6 +54,11 @@ public class RaftConfig {
      * */
     private int leaderAutoFailCount;
 
+    /**
+     * 日志文件生成快照的阈值(单位：byte字节)
+     * */
+    private long logFileThreshold;
+
     public RaftConfig(RaftNodeConfig currentNodeConfig,List<RaftNodeConfig> raftNodeConfigList) {
         this.serverId = currentNodeConfig.getServerId();
         this.currentNodeConfig = currentNodeConfig;
@@ -121,6 +126,14 @@ public class RaftConfig {
 
     public void setLeaderAutoFailCount(int leaderAutoFailCount) {
         this.leaderAutoFailCount = leaderAutoFailCount;
+    }
+
+    public long getLogFileThreshold() {
+        return logFileThreshold;
+    }
+
+    public void setLogFileThreshold(long logFileThreshold) {
+        this.logFileThreshold = logFileThreshold;
     }
 
     private boolean isOddNumber(int num){

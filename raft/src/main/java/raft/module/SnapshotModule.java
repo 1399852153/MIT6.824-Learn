@@ -10,7 +10,6 @@ import raft.util.MyRaftFileUtil;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SnapshotModule {
@@ -18,16 +17,35 @@ public class SnapshotModule {
 
     private final RaftServer currentServer;
 
+    private File snapshotFile;
+
     private final ReentrantReadWriteLock reentrantLock = new ReentrantReadWriteLock();
     private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
     private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
+
+    private static final String snapshotFileName = "snapshot.txt";
+    private static final String snapshotTempFileName = "snapshot-temp.txt";
+
 
     public SnapshotModule(RaftServer currentServer) {
         this.currentServer = currentServer;
 
         // 保证目录是存在的
         String snapshotFileDir = getSnapshotFileDir();
-        MyRaftFileUtil.createFile(new File(snapshotFileDir));
+        new File(snapshotFileDir).mkdirs();
+
+        snapshotFile = new File(snapshotFileDir + File.separator + snapshotFileName);
+
+        File snapshotTempFile = new File(snapshotFileDir + File.separator + snapshotTempFileName);
+
+        if(!snapshotFile.exists() && snapshotTempFile.exists()){
+            // 快照文件不存在，但是快照的临时文件存在。说明在写完临时文件并重命名之前宕机了(临时文件是最新的完整快照)
+
+            // 将tempFile重命名为快照文件
+            snapshotTempFile.renameTo(snapshotFile);
+
+            logger.info("snapshot-temp file rename to snapshot file success!");
+        }
     }
 
     /**
@@ -39,17 +57,24 @@ public class SnapshotModule {
 
         String userPath = getSnapshotFileDir();
 
-        // 认为时间是准确的，值更大说明是更新的快照
-        long currentTime = System.currentTimeMillis();
-        String newSnapshotFilePath = userPath + File.separator + "snapshot-" + currentTime + ".txt";
+        // 新的文件名是tempFile
+        String newSnapshotFilePath = userPath + File.separator + snapshotTempFileName;
         logger.info("do persistentNewSnapshotFile newSnapshotFilePath={}",newSnapshotFilePath);
 
         try {
-            RandomAccessFile newSnapshotFile = new RandomAccessFile(new File(newSnapshotFilePath), "rw");
+            File snapshotTempFile = new File(newSnapshotFilePath);
+            MyRaftFileUtil.createFile(snapshotTempFile);
+
+            RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotTempFile, "rw");
             newSnapshotFile.writeInt(raftSnapshot.getLastIncludedTerm());
             newSnapshotFile.writeLong(raftSnapshot.getLastIncludedIndex());
             newSnapshotFile.writeInt(raftSnapshot.getSnapshotData().length);
             newSnapshotFile.write(raftSnapshot.getSnapshotData());
+            newSnapshotFile.close();
+
+            // 先删掉原来的快照文件，然后把临时文件重名名为快照文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
+            snapshotFile.delete();
+            snapshotTempFile.renameTo(snapshotFile);
 
             logger.info("do persistentNewSnapshotFile success! raftSnapshot={}",raftSnapshot);
         }catch (IOException e){
@@ -64,13 +89,10 @@ public class SnapshotModule {
 
         readLock.lock();
 
-        String userPath = getSnapshotFileDir();
-
         try {
-            File latestSnapshotFile = findLatestSnapshot(Objects.requireNonNull(new File(userPath).listFiles()));
-            logger.info("do persistentNewSnapshotFile latestSnapshotFile={}",latestSnapshotFile);
+            logger.info("do persistentNewSnapshotFile");
 
-            RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(latestSnapshotFile, "r");
+            RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r");
 
             RaftSnapshot latestSnapshot = new RaftSnapshot();
             latestSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
@@ -89,23 +111,6 @@ public class SnapshotModule {
         } finally {
             readLock.unlock();
         }
-    }
-
-    private File findLatestSnapshot(File[] files){
-        if(files.length == 0){
-            return null;
-        }
-        
-        File maxFile = files[0];
-        for(File currentFile : files){
-            String maxFileName = maxFile.getName();
-            String currentFileName = currentFile.getName();
-            if(currentFileName.compareTo(maxFileName) > 0){
-                maxFile = currentFile;
-            }
-        }
-
-        return maxFile;
     }
 
     private String getSnapshotFileDir(){

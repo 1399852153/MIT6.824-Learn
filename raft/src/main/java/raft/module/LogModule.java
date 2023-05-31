@@ -378,23 +378,35 @@ public class LogModule {
                     appendEntriesRpcParam.setTerm(currentServer.getCurrentTerm());
                     appendEntriesRpcParam.setLeaderCommit(this.lastCommittedIndex);
 
-                    // nextIndex至少为1，所以不必担心-1会找不到日志记录
+                    // nextIndex至少为1，所以不必担心-1会为负数
                     List<LogEntry> logEntryList = this.readLocalLog(nextIndex-1,nextIndex);
                     if(logEntryList.size() == 2){
+                        // 一般情况能查出两条日志，一个是要同步的日志，一个是要同步日志的前一条记录
                         LogEntry preLogEntry = logEntryList.get(0);
 
                         appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(1)));
                         appendEntriesRpcParam.setPrevLogIndex(preLogEntry.getLogIndex());
                         appendEntriesRpcParam.setPrevLogTerm(preLogEntry.getLogTerm());
                     }else if(logEntryList.size() == 1){
-                        // 日志长度为1,说明是第一条日志记录
-                        logEntryList.add(logEntryList.get(0));
-                        appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
-                        // 第一条记录的prev的index和term都是-1
-                        appendEntriesRpcParam.setPrevLogIndex(-1);
-                        appendEntriesRpcParam.setPrevLogTerm(-1);
+                        RaftSnapshot raftSnapshot = currentServer.getSnapshotModule().readLatestSnapshot();
+                        if(raftSnapshot == null){
+                            // 日志长度为1,且没有快照，说明恰好是第一条日志记录
+                            logEntryList.add(logEntryList.get(0));
+                            appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
+                            // 第一条记录的prev的index和term都是-1
+                            appendEntriesRpcParam.setPrevLogIndex(-1);
+                            appendEntriesRpcParam.setPrevLogTerm(-1);
+                        }else{
+                            // 日志长度为1，但有快照，说明发生了日志压缩恰好把上一条记录删掉了
+                            logEntryList.add(logEntryList.get(0));
+                            appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
+                            // 使用快照里保存的上一条日志信息
+                            appendEntriesRpcParam.setPrevLogIndex(raftSnapshot.getLastIncludedIndex());
+                            appendEntriesRpcParam.setPrevLogTerm(raftSnapshot.getLastIncludedTerm());
+                        }
                     }else if(logEntryList.isEmpty()){
-                        logger.info("can not find");
+                        // 日志压缩把要同步的日志全都删除掉了，只能使用installRpc了
+                        logger.info("can not find and log entry，maybe delete for log compress");
                         // 快照压缩导致leader更早的index日志已经不存在了
                         // 应该改为使用installSnapshot来同步进度
                     }else{

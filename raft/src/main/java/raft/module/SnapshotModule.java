@@ -87,6 +87,11 @@ public class SnapshotModule {
     public RaftSnapshot readLatestSnapshot(){
         logger.info("do readLatestSnapshot");
 
+        if(this.snapshotFile.length() == 0){
+            logger.info("snapshotFile is empty!");
+            return null;
+        }
+
         readLock.lock();
 
         try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
@@ -101,7 +106,6 @@ public class SnapshotModule {
             byte[] snapshotData = new byte[snapshotSize];
             latestSnapshotRaFile.read(snapshotData);
             latestSnapshot.setSnapshotData(snapshotData);
-
 
             logger.info("readLatestSnapshot success! latestSnapshot={}",latestSnapshot);
             return latestSnapshot;

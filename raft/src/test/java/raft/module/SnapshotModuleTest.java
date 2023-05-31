@@ -20,6 +20,8 @@ public class SnapshotModuleTest {
 
         SnapshotModule snapshotModule = new SnapshotModule(raftServer);
 
+        Assert.assertNull(snapshotModule.readLatestSnapshot());
+
         RaftSnapshot raftSnapshot = new RaftSnapshot();
         raftSnapshot.setSnapshotData("aaa".getBytes(StandardCharsets.UTF_8));
         raftSnapshot.setLastIncludedTerm(1);

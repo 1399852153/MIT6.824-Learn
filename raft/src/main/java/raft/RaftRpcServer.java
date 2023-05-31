@@ -31,8 +31,10 @@ public class RaftRpcServer extends RaftServer {
 
     @Override
     public void init(List<RaftService> otherNodeInCluster) {
+        // 先初始化内部模块
         super.init(otherNodeInCluster);
 
+        // 初始化内部的模块后，启动rpc
         initRpcServer();
     }
 

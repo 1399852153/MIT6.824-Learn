@@ -130,5 +130,7 @@ public class LogModuleTest {
             Assert.assertEquals(logEntry.getLogIndex(),1);
             Assert.assertEquals(logEntry.getLogTerm(),1);
         }
+
+        logModule.clean();
     }
 }

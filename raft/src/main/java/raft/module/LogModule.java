@@ -20,7 +20,6 @@ import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -32,8 +31,7 @@ public class LogModule {
     private static final int LONG_SIZE = 8;
 
     private final File logFile;
-    private final File logMetaDataFileOriginal;
-    private final RandomAccessFile logMetaDataFile;
+    private final File logMetaDataFile;
 
     /**
      * 每条记录后面都带上这个，用于找到
@@ -64,59 +62,73 @@ public class LogModule {
     private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
     private final ReentrantReadWriteLock.ReadLock readLock = reentrantLock.readLock();
 
+    private static final String logFileName = "raftLog.txt";
+    private static final String logMetaDataFileName = "raftLogMeta.txt";
+    private static final String logTempFileName = "raftLog-temp.txt";
+    private static final String logMetaDataTempFileName = "raftLogMeta-temp.txt";
+
     private final ScheduledExecutorService scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
 
     public LogModule(RaftServer currentServer) throws IOException {
         this.currentServer = currentServer;
 
-        int serverId = currentServer.getServerId();
-
         int threadPoolSize = Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2;
-        logger.info("LogModule threadPoolSize={}",threadPoolSize);
         this.rpcThreadPool = new ThreadPoolExecutor(threadPoolSize, threadPoolSize,
             0L, TimeUnit.MILLISECONDS, new SynchronousQueue<>());
 
-        String userPath = System.getProperty("user.dir") + File.separator + serverId;
+        String logFileDir = getLogFileDir();
 
-        this.logFile = new File(userPath + File.separator + "raftLog.txt");
-        MyRaftFileUtil.createFile(logFile);
-
-        File logMetaDataFile = new File(userPath + File.separator + "raftLogMeta" + serverId + ".txt");
+        this.logMetaDataFile = new File(logFileDir + File.separator + logMetaDataFileName);
         MyRaftFileUtil.createFile(logMetaDataFile);
 
-        this.logMetaDataFileOriginal = logMetaDataFile;
-        this.logMetaDataFile = new RandomAccessFile(logMetaDataFile,"rw");
+        this.logFile = new File(logFileDir + File.separator + logFileName);
+        MyRaftFileUtil.createFile(logFile);
 
-        if(this.logMetaDataFile.length() >= LONG_SIZE){
-            this.currentOffset = this.logMetaDataFile.readLong();
-        }else{
-            this.currentOffset = 0;
+
+        File logMetaDataTempFile = new File(logFileDir + File.separator + logMetaDataTempFileName);
+
+        // 临时的元数据文件存在，说明在日志压缩时宕机了(没来得及完成rename)，需要恢复(这个时候新的日志文件已经生成好了)
+        if(logMetaDataTempFile.exists() && logMetaDataTempFile.length() > 0){
+            File logTempFile = new File(logFileDir + File.separator + logTempFileName);
+            if(logTempFile.exists()){
+                // tempLog替换掉老的日志文件
+                logTempFile.renameTo(logFile);
+            }
+
+            // 元数据文件也替换掉
+            logMetaDataTempFile.renameTo(logMetaDataFile);
         }
 
-        try(RandomAccessFile randomAccessFile = new RandomAccessFile(logFile,"r")) {
+        try(RandomAccessFile randomAccessLogMetaDataFile = new RandomAccessFile(logMetaDataFile, "r")) {
+            if (randomAccessLogMetaDataFile.length() >= LONG_SIZE) {
+                this.currentOffset = randomAccessLogMetaDataFile.readLong();
+            } else {
+                this.currentOffset = 0;
+            }
+        }
+
+        try(RandomAccessFile randomAccessLogFile = new RandomAccessFile(logFile,"r")) {
             // 尝试读取之前已有的日志文件，找到最后一条日志的index
             if (this.currentOffset >= LONG_SIZE) {
                 // 跳转到最后一个记录的offset处
-                randomAccessFile.seek(this.currentOffset - LONG_SIZE);
+                randomAccessLogFile.seek(this.currentOffset - LONG_SIZE);
 
                 // 获得记录的offset
-                long entryOffset = randomAccessFile.readLong();
+                long entryOffset = randomAccessLogFile.readLong();
                 // 跳转至对应位置
-                randomAccessFile.seek(entryOffset);
+                randomAccessLogFile.seek(entryOffset);
 
-                this.lastIndex = randomAccessFile.readLong();
+                this.lastIndex = randomAccessLogFile.readLong();
             }else{
                 // 之前的日志为空，lastIndex初始化为-1
                 this.lastIndex = -1;
             }
         }
 
-        /**
-         * todo 启动一个定时任务，检查日志文件是否超过阈值。
-         * 如果超过了，则找状态机获得一份快照（写入快照文件中），然后删除已提交的日志(加写锁，把当前未提交的日志列表读取出来写到一份新的文件里，令日志文件为新生成的文件)
-         * 如果在这个过程中宕机了应该怎么处理？
-         * */
-        // 为了测试时更快看到效果，10秒就检查一下
+        /*
+          启动一个定时任务，检查日志文件是否超过阈值。
+          如果超过了，则找状态机获得一份快照（写入快照文件中），然后删除已提交的日志(加写锁，把当前未提交的日志列表读取出来写到一份新的文件里，令日志文件为新生成的文件)
+          */
         scheduledExecutorService.scheduleWithFixedDelay(()->{
             if(currentServer.getRaftConfig().getLogFileThreshold() <= 0){
                 // 相当于没配置，不生成快照
@@ -124,7 +136,7 @@ public class LogModule {
             }
 
             buildSnapshotCheck();
-        },10,10,TimeUnit.SECONDS);
+        },10,10,TimeUnit.SECONDS);  // 为了测试时更快看到效果，10秒就检查一下
     }
 
     /**
@@ -141,19 +153,14 @@ public class LogModule {
             // 追加写入
             randomAccessFile.seek(logFile.length());
 
-            randomAccessFile.writeLong(logEntry.getLogIndex());
-            randomAccessFile.writeInt(logEntry.getLogTerm());
-
-            byte[] commandBytes = JsonUtil.obj2Str(logEntry.getCommand()).getBytes(StandardCharsets.UTF_8);
-            randomAccessFile.writeInt(commandBytes.length);
-            randomAccessFile.write(commandBytes);
+            writeLog(randomAccessFile,logEntry);
             randomAccessFile.writeLong(this.currentOffset);
 
             // 更新偏移量
             this.currentOffset = randomAccessFile.getFilePointer();
 
             // 持久化currentOffset的值，二阶段提交修改currentOffset的值，宕机恢复时以持久化的值为准
-            refreshMetadata();
+            refreshMetadata(this.logMetaDataFile,this.currentOffset);
 
             // 设置最后写入的索引编号，lastIndex
             this.lastIndex = logEntry.getLogIndex();
@@ -162,6 +169,15 @@ public class LogModule {
         } finally {
             writeLock.unlock();
         }
+    }
+
+    private static void writeLog(RandomAccessFile randomAccessFile,LogEntry logEntry) throws IOException {
+        randomAccessFile.writeLong(logEntry.getLogIndex());
+        randomAccessFile.writeInt(logEntry.getLogTerm());
+
+        byte[] commandBytes = JsonUtil.obj2Str(logEntry.getCommand()).getBytes(StandardCharsets.UTF_8);
+        randomAccessFile.writeInt(commandBytes.length);
+        randomAccessFile.write(commandBytes);
     }
 
     /**
@@ -219,8 +235,7 @@ public class LogModule {
         }
 
         try {
-            // 链表效率高一点
-            List<LogEntry> logEntryList = new LinkedList<>();
+            List<LogEntry> logEntryList = new ArrayList<>();
             try (RandomAccessFile randomAccessFile = new RandomAccessFile(this.logFile, "r")) {
                 // 从后往前找
                 long offset = this.currentOffset;
@@ -316,7 +331,7 @@ public class LogModule {
                 if(targetLogIndex == logIndexNeedDelete){
                     // 把文件的偏移量刷新一下就行(相当于逻辑删除这条日志以及之后的entry)
                     this.currentOffset = entryOffset;
-                    refreshMetadata();
+                    refreshMetadata(this.logMetaDataFile,this.currentOffset);
                     return;
                 }else{
                     // 没找到
@@ -499,11 +514,10 @@ public class LogModule {
     /**
      * 用于单元测试
      * */
-    public void clean() throws IOException {
+    public void clean() {
         System.out.println("log module clean!");
         this.logFile.delete();
-        this.logMetaDataFile.close();
-        this.logMetaDataFileOriginal.delete();
+        this.logMetaDataFile.delete();
     }
 
     private LogEntry readLocalLogByOffset(RandomAccessFile randomAccessFile, long logIndex) throws IOException {
@@ -522,18 +536,26 @@ public class LogModule {
         return logEntry;
     }
 
-    private void refreshMetadata() throws IOException {
-        this.logMetaDataFile.seek(0);
-        this.logMetaDataFile.writeLong(this.currentOffset);
+    private static void refreshMetadata(File logMetaDataFile,long currentOffset) throws IOException {
+        try(RandomAccessFile randomAccessFile = new RandomAccessFile(logMetaDataFile,"rw")){
+            randomAccessFile.seek(0);
+            randomAccessFile.writeLong(currentOffset);
+        }
+    }
+
+    private String getLogFileDir(){
+        return System.getProperty("user.dir")
+            + File.separator + currentServer.getServerId();
     }
 
     private void buildSnapshotCheck() {
         try {
-            if(readLock.tryLock(1,TimeUnit.SECONDS)){
+            if(!readLock.tryLock(1,TimeUnit.SECONDS)){
+                logger.info("buildSnapshotCheck lock fail, quick return!");
                 return;
             }
         } catch (InterruptedException e) {
-            throw new MyRaftException("buildSnapshotCheck error!",e);
+            throw new MyRaftException("buildSnapshotCheck tryLock error!",e);
         }
 
         try {
@@ -556,11 +578,58 @@ public class LogModule {
 
             // 持久化最新的一份快照
             currentServer.getSnapshotModule().persistentNewSnapshotFile(raftSnapshot);
-
-            // 删除掉日志文件中lastCommittedIndex之前的所有日志
-
         }finally {
             readLock.unlock();
+        }
+
+        try {
+            buildNewLogFileRemoveCommittedLog();
+        } catch (IOException e) {
+            logger.error("buildNewLogFileRemoveCommittedLog error",e);
+        }
+    }
+
+    /**
+     * 构建一个删除了已提交日志的新日志文件(日志压缩到快照里了)
+     * */
+    private void buildNewLogFileRemoveCommittedLog() throws IOException {
+        long lastCommitted = getLastCommittedIndex();
+        long lastIndex = getLastIndex();
+
+        File tempLogFile = new File(getLogFileDir() + File.separator + logTempFileName);
+        MyRaftFileUtil.createFile(tempLogFile);
+
+        // 暂不考虑读取太多造成内存溢出的问题
+        List<LogEntry> logEntryList = readLocalLog(lastCommitted,lastIndex);
+        RandomAccessFile randomAccessTempLogFile = new RandomAccessFile(tempLogFile,"rw");
+
+        long currentOffset = 0;
+        for(LogEntry logEntry : logEntryList){
+            writeLog(randomAccessTempLogFile,logEntry);
+            randomAccessTempLogFile.writeLong(currentOffset);
+
+            // 写入偏移量
+            currentOffset = randomAccessTempLogFile.getFilePointer();
+        }
+
+        File tempLogMeteDataFile = new File(getLogFileDir() + File.separator + logMetaDataTempFileName);
+        MyRaftFileUtil.createFile(tempLogMeteDataFile);
+
+        // 临时的日志元数据文件写入数据
+        refreshMetadata(tempLogMeteDataFile,currentOffset);
+
+        writeLock.lock();
+        try{
+            // 先删掉原来的日志文件，然后把临时文件重名名为日志文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
+            this.logFile.delete();
+            tempLogFile.renameTo(this.logFile);
+
+            // 先删掉原来的日志元数据文件，然后把临时文件重名名为日志元数据文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
+            this.logMetaDataFile.delete();
+            tempLogMeteDataFile.renameTo(this.logMetaDataFile);
+
+        }finally {
+            writeLock.unlock();
         }
     }
 }

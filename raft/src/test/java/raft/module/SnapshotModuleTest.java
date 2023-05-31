@@ -31,5 +31,7 @@ public class SnapshotModuleTest {
         Assert.assertEquals(new String(readSnapshot.getSnapshotData(),StandardCharsets.UTF_8),"aaa");
         Assert.assertEquals(readSnapshot.getLastIncludedIndex(),10);
         Assert.assertEquals(readSnapshot.getLastIncludedTerm(),1);
+
+        snapshotModule.clean();
     }
 }

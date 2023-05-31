@@ -17,7 +17,7 @@ public class SnapshotModule {
 
     private final RaftServer currentServer;
 
-    private File snapshotFile;
+    private final File snapshotFile;
 
     private final ReentrantReadWriteLock reentrantLock = new ReentrantReadWriteLock();
     private final ReentrantReadWriteLock.WriteLock writeLock = reentrantLock.writeLock();
@@ -55,30 +55,30 @@ public class SnapshotModule {
         logger.info("do persistentNewSnapshotFile raftSnapshot={}",raftSnapshot);
         writeLock.lock();
 
-        String userPath = getSnapshotFileDir();
-
-        // 新的文件名是tempFile
-        String newSnapshotFilePath = userPath + File.separator + snapshotTempFileName;
-        logger.info("do persistentNewSnapshotFile newSnapshotFilePath={}",newSnapshotFilePath);
-
         try {
-            File snapshotTempFile = new File(newSnapshotFilePath);
-            MyRaftFileUtil.createFile(snapshotTempFile);
+            String userPath = getSnapshotFileDir();
 
-            RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotTempFile, "rw");
-            newSnapshotFile.writeInt(raftSnapshot.getLastIncludedTerm());
-            newSnapshotFile.writeLong(raftSnapshot.getLastIncludedIndex());
-            newSnapshotFile.writeInt(raftSnapshot.getSnapshotData().length);
-            newSnapshotFile.write(raftSnapshot.getSnapshotData());
-            newSnapshotFile.close();
+            // 新的文件名是tempFile
+            String newSnapshotFilePath = userPath + File.separator + snapshotTempFileName;
+            logger.info("do persistentNewSnapshotFile newSnapshotFilePath={}", newSnapshotFilePath);
+
+            File snapshotTempFile = new File(newSnapshotFilePath);
+            try (RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotTempFile, "rw")) {
+                MyRaftFileUtil.createFile(snapshotTempFile);
+
+                newSnapshotFile.writeInt(raftSnapshot.getLastIncludedTerm());
+                newSnapshotFile.writeLong(raftSnapshot.getLastIncludedIndex());
+                newSnapshotFile.writeInt(raftSnapshot.getSnapshotData().length);
+                newSnapshotFile.write(raftSnapshot.getSnapshotData());
+
+                logger.info("do persistentNewSnapshotFile success! raftSnapshot={}", raftSnapshot);
+            } catch (IOException e) {
+                throw new MyRaftException("persistentNewSnapshotFile error", e);
+            }
 
             // 先删掉原来的快照文件，然后把临时文件重名名为快照文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
             snapshotFile.delete();
             snapshotTempFile.renameTo(snapshotFile);
-
-            logger.info("do persistentNewSnapshotFile success! raftSnapshot={}",raftSnapshot);
-        }catch (IOException e){
-            throw new MyRaftException("persistentNewSnapshotFile error",e);
         }finally {
             writeLock.unlock();
         }
@@ -89,10 +89,8 @@ public class SnapshotModule {
 
         readLock.lock();
 
-        try {
+        try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
             logger.info("do persistentNewSnapshotFile");
-
-            RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r");
 
             RaftSnapshot latestSnapshot = new RaftSnapshot();
             latestSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
@@ -104,6 +102,7 @@ public class SnapshotModule {
             latestSnapshotRaFile.read(snapshotData);
             latestSnapshot.setSnapshotData(snapshotData);
 
+
             logger.info("readLatestSnapshot success! latestSnapshot={}",latestSnapshot);
             return latestSnapshot;
         } catch (IOException e) {
@@ -111,6 +110,14 @@ public class SnapshotModule {
         } finally {
             readLock.unlock();
         }
+    }
+
+    /**
+     * 用于单元测试
+     * */
+    public void clean() {
+        System.out.println("snapshot module clean!");
+        System.out.println(this.snapshotFile.delete());
     }
 
     private String getSnapshotFileDir(){

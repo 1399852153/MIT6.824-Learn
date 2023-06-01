@@ -1,7 +1,5 @@
 package raft.common.model;
 
-import java.util.Arrays;
-
 /**
  * raft快照对象
  * */

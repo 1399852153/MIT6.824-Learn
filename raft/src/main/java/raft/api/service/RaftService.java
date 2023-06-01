@@ -5,6 +5,11 @@ import raft.api.model.*;
 public interface RaftService {
 
     /**
+     * 客户端的请求
+     * */
+    ClientRequestResult clientRequest(ClientRequestParam clientRequestParam);
+
+    /**
      * 请求投票 requestVote
      *
      * Receiver implementation:
@@ -25,7 +30,7 @@ public interface RaftService {
     AppendEntriesRpcResult appendEntries(AppendEntriesRpcParam appendEntriesRpcParam);
 
     /**
-     * 客户端的请求
+     * 快照安装 InstallSnapshot
      * */
-    ClientRequestResult clientRequest(ClientRequestParam clientRequestParam);
+    InstallSnapshotRpcResult installSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam);
 }

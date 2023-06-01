@@ -40,6 +40,14 @@ public class RaftRpcConsumer implements RaftService {
     }
 
     @Override
+    public InstallSnapshotRpcResult installSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam) {
+        // 强制指定rpc目标的ip/port
+        setTargetProviderUrl();
+        InstallSnapshotRpcResult result = raftServiceProxy.installSnapshot(installSnapshotRpcParam);
+        return result;
+    }
+
+    @Override
     public ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
         // 只有raft的客户端才会调用这个方法，服务端是不会调用这个方法的
         throw new MyRaftException("raft server node can not be invoke clientRequest!");

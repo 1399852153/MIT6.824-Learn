@@ -135,6 +135,32 @@ public class RaftServer implements RaftService {
     }
 
     @Override
+    public InstallSnapshotRpcResult installSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam) {
+        logger.info("installSnapshot start! serverId={}",this.serverId);
+
+        if(installSnapshotRpcParam.getTerm() < this.currentTerm){
+            // Reply immediately if term < currentTerm
+            // 拒绝处理任期低于自己的老leader的请求
+
+            logger.info("installSnapshot term < currentTerm");
+            return new InstallSnapshotRpcResult(this.currentTerm);
+        }
+
+        this.getSnapshotModule().appendInstallSnapshot(installSnapshotRpcParam);
+        if(installSnapshotRpcParam.isDone()){
+            // discard any existing or partial snapshot with a smaller index
+            // 快照整体安装完毕，清理掉index小于等于快照中lastIncludedIndex的所有日志
+
+            // Reset state machine using snapshot contents (and load snapshot’s cluster configuration)
+            // follower的状态机重新安装快照
+        }
+
+        logger.info("installSnapshot end! serverId={}",this.serverId);
+
+        return new InstallSnapshotRpcResult(this.currentTerm);
+    }
+
+    @Override
     public synchronized ClientRequestResult clientRequest(ClientRequestParam clientRequestParam) {
         // 不是leader
         if(this.serverStatusEnum != ServerStatusEnum.LEADER){

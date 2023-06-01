@@ -3,6 +3,7 @@ package raft.module;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
+import raft.api.model.InstallSnapshotRpcParam;
 import raft.common.model.RaftSnapshot;
 import raft.exception.MyRaftException;
 import raft.util.MyRaftFileUtil;
@@ -26,6 +27,10 @@ public class SnapshotModule {
     private static final String snapshotFileName = "snapshot.txt";
     private static final String snapshotTempFileName = "snapshot-temp.txt";
 
+    /**
+     * 存放快照实际数据的偏移量(lastIncludedIndex + lastIncludedTerm 共两个字段后存放快照)
+     * */
+    private static final int actualDataOffset = 4 + 8;
 
     public SnapshotModule(RaftServer currentServer) {
         this.currentServer = currentServer;
@@ -50,6 +55,7 @@ public class SnapshotModule {
 
     /**
      * 持久化一个新的快照文件
+     * (暂不考虑快照太大的问题)
      * */
     public void persistentNewSnapshotFile(RaftSnapshot raftSnapshot){
         logger.info("do persistentNewSnapshotFile raftSnapshot={}",raftSnapshot);
@@ -68,7 +74,6 @@ public class SnapshotModule {
 
                 newSnapshotFile.writeInt(raftSnapshot.getLastIncludedTerm());
                 newSnapshotFile.writeLong(raftSnapshot.getLastIncludedIndex());
-                newSnapshotFile.writeInt(raftSnapshot.getSnapshotData().length);
                 newSnapshotFile.write(raftSnapshot.getSnapshotData());
 
                 logger.info("do persistentNewSnapshotFile success! raftSnapshot={}", raftSnapshot);
@@ -80,6 +85,33 @@ public class SnapshotModule {
             snapshotFile.delete();
             snapshotTempFile.renameTo(snapshotFile);
         }finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void appendInstallSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam){
+        logger.info("do appendInstallSnapshot installSnapshotRpcParam={}",installSnapshotRpcParam);
+        writeLock.lock();
+
+        // 直接覆盖当前的快照文件
+        try (RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotFile, "rw")) {
+            if(installSnapshotRpcParam.getOffset() == 0){
+                newSnapshotFile.seek(0);
+                newSnapshotFile.setLength(0);
+
+                newSnapshotFile.writeInt(installSnapshotRpcParam.getLastIncludedTerm());
+                newSnapshotFile.writeLong(installSnapshotRpcParam.getLastIncludedIndex());
+            }
+
+            // 文件指针偏移，找到实际应该写入快照数据的地方
+            newSnapshotFile.seek(actualDataOffset + installSnapshotRpcParam.getOffset());
+            // 写入快照数据
+            newSnapshotFile.write(installSnapshotRpcParam.getData());
+
+            logger.info("do appendInstallSnapshot success! installSnapshotRpcParam={}", installSnapshotRpcParam);
+        } catch (IOException e) {
+            throw new MyRaftException("appendInstallSnapshot error", e);
+        } finally {
             writeLock.unlock();
         }
     }
@@ -102,8 +134,7 @@ public class SnapshotModule {
             latestSnapshot.setLastIncludedIndex(latestSnapshotRaFile.readLong());
 
             // 读取snapshot的实际数据(暂不考虑快照太大的问题)
-            int snapshotSize = latestSnapshotRaFile.readInt();
-            byte[] snapshotData = new byte[snapshotSize];
+            byte[] snapshotData = new byte[(int) (this.snapshotFile.length() - actualDataOffset)];
             latestSnapshotRaFile.read(snapshotData);
             latestSnapshot.setSnapshotData(snapshotData);
 

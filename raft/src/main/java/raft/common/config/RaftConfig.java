@@ -59,6 +59,11 @@ public class RaftConfig {
      * */
     private long logFileThreshold;
 
+    /**
+     * 快照安装的rpc，每次传输的数据块大小
+     * */
+    private int installSnapshotBlockSize;
+
     public RaftConfig(RaftNodeConfig currentNodeConfig,List<RaftNodeConfig> raftNodeConfigList) {
         this.serverId = currentNodeConfig.getServerId();
         this.currentNodeConfig = currentNodeConfig;
@@ -134,6 +139,14 @@ public class RaftConfig {
 
     public void setLogFileThreshold(long logFileThreshold) {
         this.logFileThreshold = logFileThreshold;
+    }
+
+    public int getInstallSnapshotBlockSize() {
+        return installSnapshotBlockSize;
+    }
+
+    public void setInstallSnapshotBlockSize(int installSnapshotBlockSize) {
+        this.installSnapshotBlockSize = installSnapshotBlockSize;
     }
 
     private boolean isOddNumber(int num){

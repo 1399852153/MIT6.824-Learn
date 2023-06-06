@@ -152,7 +152,7 @@ public class RaftServer implements RaftService {
             // 快照整体安装完毕，清理掉index小于等于快照中lastIncludedIndex的所有日志
 
             // Reset state machine using snapshot contents (and load snapshot’s cluster configuration)
-            // follower的状态机重新安装快照
+            // todo follower的状态机重新安装快照
         }
 
         logger.info("installSnapshot end! serverId={}",this.serverId);

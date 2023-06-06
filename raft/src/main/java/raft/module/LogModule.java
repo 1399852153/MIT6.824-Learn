@@ -5,9 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import raft.RaftServer;
 import raft.api.command.Command;
-import raft.api.model.AppendEntriesRpcParam;
-import raft.api.model.AppendEntriesRpcResult;
-import raft.api.model.LogEntry;
+import raft.api.model.*;
 import raft.api.service.RaftService;
 import raft.common.model.RaftSnapshot;
 import raft.exception.MyRaftException;
@@ -388,27 +386,30 @@ public class LogModule {
                         appendEntriesRpcParam.setPrevLogIndex(preLogEntry.getLogIndex());
                         appendEntriesRpcParam.setPrevLogTerm(preLogEntry.getLogTerm());
                     }else if(logEntryList.size() == 1){
-                        RaftSnapshot raftSnapshot = currentServer.getSnapshotModule().readLatestSnapshot();
-                        if(raftSnapshot == null){
+                        RaftSnapshot readSnapshotNoData = currentServer.getSnapshotModule().readSnapshotMetaData();
+                        logEntryList.add(logEntryList.get(0));
+                        appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
+
+                        if(readSnapshotNoData == null){
                             // 日志长度为1,且没有快照，说明恰好是第一条日志记录
-                            logEntryList.add(logEntryList.get(0));
-                            appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
                             // 第一条记录的prev的index和term都是-1
                             appendEntriesRpcParam.setPrevLogIndex(-1);
                             appendEntriesRpcParam.setPrevLogTerm(-1);
                         }else{
                             // 日志长度为1，但有快照，说明发生了日志压缩恰好把上一条记录删掉了
-                            logEntryList.add(logEntryList.get(0));
-                            appendEntriesRpcParam.setEntries(Collections.singletonList(logEntryList.get(0)));
                             // 使用快照里保存的上一条日志信息
-                            appendEntriesRpcParam.setPrevLogIndex(raftSnapshot.getLastIncludedIndex());
-                            appendEntriesRpcParam.setPrevLogTerm(raftSnapshot.getLastIncludedTerm());
+                            appendEntriesRpcParam.setPrevLogIndex(readSnapshotNoData.getLastIncludedIndex());
+                            appendEntriesRpcParam.setPrevLogTerm(readSnapshotNoData.getLastIncludedTerm());
                         }
                     }else if(logEntryList.isEmpty()){
-                        // 日志压缩把要同步的日志全都删除掉了，只能使用installRpc了
+                        // 日志压缩把要同步的日志删除掉了，只能使用installSnapshotRpc了
                         logger.info("can not find and log entry，maybe delete for log compress");
                         // 快照压缩导致leader更早的index日志已经不存在了
                         // 应该改为使用installSnapshot来同步进度
+
+                        RaftSnapshot raftSnapshot = currentServer.getSnapshotModule().readSnapshot();
+
+                        doInstallSnapshotRpc(node,raftSnapshot,currentServer);
                     }else{
                         // 日志长度不符合预期，日志模块有bug
                         throw new MyRaftException("replicationLogEntry logEntryList size error!" +
@@ -642,6 +643,47 @@ public class LogModule {
 
         }finally {
             writeLock.unlock();
+        }
+    }
+
+    public static void doInstallSnapshotRpc(RaftService targetNode, RaftSnapshot raftSnapshot,RaftServer currentServer){
+        int installSnapshotBlockSize = currentServer.getRaftConfig().getInstallSnapshotBlockSize();
+        byte[] completeSnapshotData = raftSnapshot.getSnapshotData();
+
+        int currentOffset = 0;
+        while(true){
+            InstallSnapshotRpcParam installSnapshotRpcParam = new InstallSnapshotRpcParam();
+            installSnapshotRpcParam.setLastIncludedIndex(raftSnapshot.getLastIncludedIndex());
+            installSnapshotRpcParam.setTerm(currentServer.getCurrentTerm());
+            installSnapshotRpcParam.setLeaderId(currentServer.getServerId());
+            installSnapshotRpcParam.setLastIncludedTerm(raftSnapshot.getLastIncludedTerm());
+            installSnapshotRpcParam.setOffset(currentOffset);
+
+            // 填充每次传输的数据块
+            int blockSize = Math.min(installSnapshotBlockSize,completeSnapshotData.length-currentOffset);
+            byte[] block = new byte[blockSize];
+            System.arraycopy(completeSnapshotData,currentOffset,block,0,blockSize);
+            installSnapshotRpcParam.setData(block);
+
+            currentOffset += installSnapshotBlockSize;
+            if(currentOffset >= completeSnapshotData.length){
+                installSnapshotRpcParam.setDone(true);
+            }else{
+                installSnapshotRpcParam.setDone(false);
+            }
+
+            InstallSnapshotRpcResult installSnapshotRpcResult = targetNode.installSnapshot(installSnapshotRpcParam);
+
+            boolean beFollower = currentServer.processCommunicationHigherTerm(installSnapshotRpcResult.getTerm());
+            if(beFollower){
+                logger.info("doInstallSnapshotRpc beFollower quick return!");
+                return;
+            }
+
+            if(installSnapshotRpcParam.isDone()){
+                logger.info("doInstallSnapshotRpc isDone!");
+                return;
+            }
         }
     }
 }

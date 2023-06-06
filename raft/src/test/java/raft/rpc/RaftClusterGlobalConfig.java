@@ -54,6 +54,11 @@ public class RaftClusterGlobalConfig {
     public static final int logFileThreshold = 512;
 
     /**
+     * 每次installSnapshotRpc传输的数据大小
+     * */
+    public static final int installSnapshotBlockSize = 64;
+
+    /**
      * 随机化的选举超时时间
      * */
     public static final Range<Integer> electionTimeoutRandomRange = new Range<>(150,500);
@@ -75,6 +80,8 @@ public class RaftClusterGlobalConfig {
         // 随机化选举超时时间的范围
         raftConfig.setElectionTimeoutRandomRange(RaftClusterGlobalConfig.electionTimeoutRandomRange);
         raftConfig.setLogFileThreshold(RaftClusterGlobalConfig.logFileThreshold);
+        raftConfig.setInstallSnapshotBlockSize(RaftClusterGlobalConfig.installSnapshotBlockSize);
+
 
         RaftRpcServer raftRpcServer = new RaftRpcServer(
             raftConfig, RaftClusterGlobalConfig.registry);

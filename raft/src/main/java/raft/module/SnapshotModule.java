@@ -116,8 +116,34 @@ public class SnapshotModule {
         }
     }
 
-    public RaftSnapshot readLatestSnapshot(){
-        logger.info("do readLatestSnapshot");
+    /**
+     * 没有实际快照数据，只有元数据
+     * */
+    public RaftSnapshot readSnapshotMetaData(){
+        readLock.lock();
+
+        try{
+            try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
+                logger.info("do readSnapshotNoData");
+
+                RaftSnapshot raftSnapshot = new RaftSnapshot();
+                raftSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
+                raftSnapshot.setLastIncludedIndex(latestSnapshotRaFile.readLong());
+
+                logger.info("readSnapshotNoData success! readSnapshotNoData={}",raftSnapshot);
+                return raftSnapshot;
+            } catch (IOException e) {
+                throw new MyRaftException("readSnapshotNoData error",e);
+            } finally {
+                readLock.unlock();
+            }
+        }finally {
+            readLock.unlock();
+        }
+    }
+
+    public RaftSnapshot readSnapshot(){
+        logger.info("do readSnapshot");
 
         if(this.snapshotFile.length() == 0){
             logger.info("snapshotFile is empty!");
@@ -127,21 +153,21 @@ public class SnapshotModule {
         readLock.lock();
 
         try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
-            logger.info("do persistentNewSnapshotFile");
+            logger.info("do readSnapshot");
 
             RaftSnapshot latestSnapshot = new RaftSnapshot();
             latestSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
             latestSnapshot.setLastIncludedIndex(latestSnapshotRaFile.readLong());
 
-            // 读取snapshot的实际数据(暂不考虑快照太大的问题)
+            // 读取snapshot的实际数据(简单起见，暂不考虑快照太大内存溢出的问题，可以优化为按照偏移量多次读取)
             byte[] snapshotData = new byte[(int) (this.snapshotFile.length() - actualDataOffset)];
             latestSnapshotRaFile.read(snapshotData);
             latestSnapshot.setSnapshotData(snapshotData);
 
-            logger.info("readLatestSnapshot success! latestSnapshot={}",latestSnapshot);
+            logger.info("readSnapshot success! readSnapshot={}",latestSnapshot);
             return latestSnapshot;
         } catch (IOException e) {
-            throw new MyRaftException("readLatestSnapshot error",e);
+            throw new MyRaftException("readSnapshot error",e);
         } finally {
             readLock.unlock();
         }

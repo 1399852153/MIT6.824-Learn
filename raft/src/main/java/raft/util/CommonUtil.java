@@ -24,9 +24,9 @@ public class CommonUtil {
         for(Future<T> futureItem : futureList){
             threadPool.execute(()->{
                 try {
-                    logger.info(info + " concurrentGetRpcFutureResult start!");
+//                    logger.info(info + " concurrentGetRpcFutureResult start!");
                     T result = futureItem.get(timeout,timeUnit);
-                    logger.info(info + " concurrentGetRpcFutureResult end!");
+//                    logger.info(info + " concurrentGetRpcFutureResult end!");
 
                     resultList.add(result);
                 } catch (Exception e) {

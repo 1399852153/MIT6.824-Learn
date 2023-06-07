@@ -593,7 +593,7 @@ public class LogModule {
             long logFileLength = this.logFile.length();
             long logFileThreshold = currentServer.getRaftConfig().getLogFileThreshold();
             if (logFileLength < logFileThreshold) {
-                logger.info("logFileLength not reach threshold, do nothing. logFileLength={},threshold={}", logFileLength, logFileThreshold);
+//                logger.info("logFileLength not reach threshold, do nothing. logFileLength={},threshold={}", logFileLength, logFileThreshold);
                 return;
             }
 

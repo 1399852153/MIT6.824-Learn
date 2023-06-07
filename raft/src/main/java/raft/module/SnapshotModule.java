@@ -122,6 +122,10 @@ public class SnapshotModule {
     public RaftSnapshot readSnapshotMetaData(){
         readLock.lock();
 
+        if(this.snapshotFile.length() == 0){
+            return null;
+        }
+
         try{
             try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
                 logger.info("do readSnapshotNoData");

@@ -10,6 +10,7 @@ import raft.common.config.RaftConfig;
 import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
 import raft.api.service.RaftService;
+import raft.common.model.RaftSnapshot;
 import raft.exception.MyRaftException;
 import raft.module.*;
 import raft.module.api.KVReplicationStateMachine;
@@ -146,13 +147,19 @@ public class RaftServer implements RaftService {
             return new InstallSnapshotRpcResult(this.currentTerm);
         }
 
-        this.getSnapshotModule().appendInstallSnapshot(installSnapshotRpcParam);
+        // 安装快照
+        this.snapshotModule.appendInstallSnapshot(installSnapshotRpcParam);
+
+        // 快照已经完全安装好了
         if(installSnapshotRpcParam.isDone()){
             // discard any existing or partial snapshot with a smaller index
-            // 快照整体安装完毕，清理掉index小于等于快照中lastIncludedIndex的所有日志
+            // 快照整体安装完毕，清理掉index小于等于快照中lastIncludedIndex的所有日志(日志压缩)
+            logModule.compressLogBySnapshot(installSnapshotRpcParam);
 
             // Reset state machine using snapshot contents (and load snapshot’s cluster configuration)
-            // todo follower的状态机重新安装快照
+            // follower的状态机重新安装快照
+            RaftSnapshot raftSnapshot = this.snapshotModule.readSnapshot();
+            kvReplicationStateMachine.installSnapshot(raftSnapshot.getSnapshotData());
         }
 
         logger.info("installSnapshot end! serverId={}",this.serverId);
@@ -239,7 +246,7 @@ public class RaftServer implements RaftService {
             logModule.setLastCommittedIndex(newLogEntry.getLogIndex());
             // 作用到状态机上
             this.kvReplicationStateMachine.apply((SetCommand) newLogEntry.getCommand());
-            // todo lastApplied为什么不需要持久化？ 状态机指令的应用和更新lastApplied非原子性会产生什么问题？
+            // 思考一下：lastApplied为什么不需要持久化？ 状态机指令的应用和更新lastApplied非原子性会产生什么问题？
             logModule.setLastApplied(newLogEntry.getLogIndex());
 
             // 返回成功
@@ -304,10 +311,17 @@ public class RaftServer implements RaftService {
         {
             LogEntry localPrevLogEntry = logModule.readLocalLog(appendEntriesRpcParam.getPrevLogIndex());
             if(localPrevLogEntry == null){
-                // 当前节点日志条目为空(默认任期为-1，这个是约定)
+                RaftSnapshot raftSnapshot = snapshotModule.readSnapshotMetaData();
                 localPrevLogEntry = new LogEntry();
-                localPrevLogEntry.setLogIndex(-1);
-                localPrevLogEntry.setLogTerm(-1);
+                if(raftSnapshot == null){
+                    // 当前节点日志条目为空,又没有快照，说明完全没有日志(默认任期为-1，这个是约定)
+                    localPrevLogEntry.setLogIndex(-1);
+                    localPrevLogEntry.setLogTerm(-1);
+                }else{
+                    // 日志里没有，但是有快照
+                    localPrevLogEntry.setLogIndex(raftSnapshot.getLastIncludedIndex());
+                    localPrevLogEntry.setLogTerm(raftSnapshot.getLastIncludedTerm());
+                }
             }
 
             if (localPrevLogEntry.getLogTerm() != appendEntriesRpcParam.getPrevLogTerm()) {

@@ -71,7 +71,7 @@ public class LogModule {
         this.currentServer = currentServer;
 
         int threadPoolSize = Math.max(currentServer.getOtherNodeInCluster().size(),1) * 2;
-        this.rpcThreadPool = new ThreadPoolExecutor(threadPoolSize, threadPoolSize,
+        this.rpcThreadPool = new ThreadPoolExecutor(threadPoolSize, threadPoolSize * 2,
             0L, TimeUnit.MILLISECONDS, new SynchronousQueue<>());
 
         String logFileDir = getLogFileDir();
@@ -405,13 +405,17 @@ public class LogModule {
                         // 日志压缩把要同步的日志删除掉了，只能使用installSnapshotRpc了
                         logger.info("can not find and log entry，maybe delete for log compress");
                         // 快照压缩导致leader更早的index日志已经不存在了
+
                         // 应该改为使用installSnapshot来同步进度
-
                         RaftSnapshot raftSnapshot = currentServer.getSnapshotModule().readSnapshot();
-
                         doInstallSnapshotRpc(node,raftSnapshot,currentServer);
+
+                        // 走到这里，一般是成功的完成了快照的安装。目标follower目前已经有了包括lastIncludedIndex以及之前的所有日志
+                        // 如果是因为成为follower快速返回，则再循环一次就结束了
+                        nextIndex = raftSnapshot.getLastIncludedIndex()+1;
+                        continue;
                     }else{
-                        // 日志长度不符合预期，日志模块有bug
+                        // 不符合预期，日志模块有bug
                         throw new MyRaftException("replicationLogEntry logEntryList size error!" +
                             " nextIndex=" + nextIndex + " logEntryList.size=" + logEntryList.size());
                     }
@@ -449,7 +453,7 @@ public class LogModule {
                 }
 
                 if(finallyResult == null){
-                    // 有bug
+                    // 说明有bug
                     throw new MyRaftException("replicationLogEntry finallyResult is null!");
                 }
 
@@ -469,6 +473,20 @@ public class LogModule {
         logger.info("leader replicationLogEntry appendEntriesRpcResultList={}",appendEntriesRpcResultList);
 
         return appendEntriesRpcResultList;
+    }
+
+    /**
+     * discard any existing or partial snapshot with a smaller index
+     * 快照整体安装完毕，清理掉index小于等于快照中lastIncludedIndex的所有日志
+     * */
+    public void compressLogBySnapshot(InstallSnapshotRpcParam installSnapshotRpcParam){
+        this.lastCommittedIndex = installSnapshotRpcParam.getLastIncludedIndex();
+
+        try {
+            buildNewLogFileRemoveCommittedLog();
+        } catch (IOException e) {
+            throw new MyRaftException("compressLogBySnapshot error",e);
+        }
     }
 
     public LogEntry getLastLogEntry(){
@@ -646,7 +664,7 @@ public class LogModule {
         }
     }
 
-    public static void doInstallSnapshotRpc(RaftService targetNode, RaftSnapshot raftSnapshot,RaftServer currentServer){
+    public static void doInstallSnapshotRpc(RaftService targetNode, RaftSnapshot raftSnapshot, RaftServer currentServer){
         int installSnapshotBlockSize = currentServer.getRaftConfig().getInstallSnapshotBlockSize();
         byte[] completeSnapshotData = raftSnapshot.getSnapshotData();
 
@@ -676,6 +694,7 @@ public class LogModule {
 
             boolean beFollower = currentServer.processCommunicationHigherTerm(installSnapshotRpcResult.getTerm());
             if(beFollower){
+                // 传输过程中发现自己已经不再是leader了，快速结束
                 logger.info("doInstallSnapshotRpc beFollower quick return!");
                 return;
             }

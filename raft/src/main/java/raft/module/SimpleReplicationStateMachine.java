@@ -81,6 +81,7 @@ public class SimpleReplicationStateMachine implements KVReplicationStateMachine 
         writeLock.lock();
 
         try {
+            // 简单起见，一把梭
             String mapJson = new String(snapshot, StandardCharsets.UTF_8);
             this.kvMap = JsonUtil.json2Obj(mapJson, new TypeReference<ConcurrentHashMap<String, String>>() {});
         }finally {

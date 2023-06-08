@@ -631,16 +631,27 @@ public class LogModule {
         MyRaftFileUtil.createFile(tempLogFile);
 
         // 暂不考虑读取太多造成内存溢出的问题
-        List<LogEntry> logEntryList = readLocalLog(lastCommitted,lastIndex);
-        RandomAccessFile randomAccessTempLogFile = new RandomAccessFile(tempLogFile,"rw");
+        List<LogEntry> logEntryList;
+        if(lastCommitted == lastIndex){
+            // 所有日志都提交了，创建一个空的新日志文件
+            logEntryList = new ArrayList<>();
+        }else{
+            // 还有日志没提交，把没提交的记录到新的日志文件中
+            logEntryList = readLocalLog(lastCommitted+1,lastIndex);
+        }
 
-        long currentOffset = 0;
-        for(LogEntry logEntry : logEntryList){
-            writeLog(randomAccessTempLogFile,logEntry);
-            randomAccessTempLogFile.writeLong(currentOffset);
+        try(RandomAccessFile randomAccessTempLogFile = new RandomAccessFile(tempLogFile,"rw")) {
 
-            // 写入偏移量
-            currentOffset = randomAccessTempLogFile.getFilePointer();
+            long currentOffset = 0;
+            for (LogEntry logEntry : logEntryList) {
+                writeLog(randomAccessTempLogFile, logEntry);
+                randomAccessTempLogFile.writeLong(currentOffset);
+
+                // 写入偏移量
+                currentOffset = randomAccessTempLogFile.getFilePointer();
+            }
+
+            this.currentOffset = currentOffset;
         }
 
         File tempLogMeteDataFile = new File(getLogFileDir() + File.separator + logMetaDataTempFileName);
@@ -653,12 +664,17 @@ public class LogModule {
         try{
             // 先删掉原来的日志文件，然后把临时文件重名名为日志文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
             this.logFile.delete();
-            tempLogFile.renameTo(this.logFile);
+            boolean renameLogFileResult = tempLogFile.renameTo(this.logFile);
+            if(!renameLogFileResult){
+                logger.error("renameLogFile error!");
+            }
 
             // 先删掉原来的日志元数据文件，然后把临时文件重名名为日志元数据文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
             this.logMetaDataFile.delete();
-            tempLogMeteDataFile.renameTo(this.logMetaDataFile);
-
+            boolean renameTempLogMeteDataFileResult = tempLogMeteDataFile.renameTo(this.logMetaDataFile);
+            if(!renameTempLogMeteDataFileResult){
+                logger.error("renameTempLogMeteDataFile error!");
+            }
         }finally {
             writeLock.unlock();
         }

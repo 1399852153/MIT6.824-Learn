@@ -4,12 +4,13 @@ import org.junit.Assert;
 import raft.RaftClient;
 import raft.api.command.GetCommand;
 import raft.api.command.SetCommand;
+import raft.rpc.config.RaftClusterGlobalConfig;
 
-public class RpcClientTest {
+public class RpcClientDemo {
 
 
     public static void main(String[] args) {
-        RaftClient raftClient = new RaftClient(RaftClusterGlobalConfig.raftNodeConfigList,RaftClusterGlobalConfig.registry);
+        RaftClient raftClient = new RaftClient(RaftClusterGlobalConfig.registry);
 
         raftClient.init();
 

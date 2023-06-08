@@ -173,7 +173,7 @@ public class RaftServer implements RaftService {
         if(this.serverStatusEnum != ServerStatusEnum.LEADER){
             if(this.currentLeader == null){
                 // 自己不是leader，也不知道谁是leader直接报错
-                throw new MyRaftException("current node not leader，and leader is null!" + this.serverId);
+                throw new MyRaftException("current node not leader，and leader is null! serverId=" + this.serverId);
             }
 
             RaftNodeConfig leaderConfig = this.raftConfig.getRaftNodeConfigList()

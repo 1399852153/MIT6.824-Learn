@@ -1,4 +1,4 @@
-package raft.rpc;
+package raft.rpc.config;
 
 import myrpc.registry.Registry;
 import myrpc.registry.RegistryConfig;
@@ -27,8 +27,8 @@ public class RaftClusterGlobalConfig {
      * */
     public static final List<RaftNodeConfig> raftNodeConfigList = Arrays.asList(
         new RaftNodeConfig(1,"127.0.0.1",8001)
-        ,new RaftNodeConfig(2,"127.0.0.1",8002)
-        ,new RaftNodeConfig(3,"127.0.0.1",8003)
+//        ,new RaftNodeConfig(2,"127.0.0.1",8002)
+//        ,new RaftNodeConfig(3,"127.0.0.1",8003)
 //        ,new RaftNodeConfig(4,"127.0.0.1",8004)
 //        ,new RaftNodeConfig(5,"127.0.0.1",8005)
     );
@@ -51,7 +51,7 @@ public class RaftClusterGlobalConfig {
     /**
      * 当日志超过这个阈值时，就会生成快照文件(单位：byte字节)
      * */
-    public static final int logFileThreshold = 512;
+    public static final int logFileThreshold = 256;
 
     /**
      * 每次installSnapshotRpc传输的数据大小

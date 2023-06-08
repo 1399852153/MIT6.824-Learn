@@ -1,5 +1,7 @@
 package raft.rpc;
 
+import raft.rpc.config.RaftClusterGlobalConfig;
+
 public class RpcRaftNode5 {
 
     /**

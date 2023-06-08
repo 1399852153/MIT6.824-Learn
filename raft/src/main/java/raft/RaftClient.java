@@ -18,12 +18,10 @@ import java.util.List;
 
 public class RaftClient {
 
-    private List<RaftNodeConfig> raftNodeConfigList;
-    private Registry registry;
+    private final Registry registry;
     private RaftService raftServiceProxy;
 
-    public RaftClient(List<RaftNodeConfig> raftNodeConfigList, Registry registry) {
-        this.raftNodeConfigList = raftNodeConfigList;
+    public RaftClient(Registry registry) {
         this.registry = registry;
     }
 

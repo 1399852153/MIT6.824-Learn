@@ -117,12 +117,11 @@ public class HeartBeatTimeoutCheckTask implements Runnable{
                 logger.info("HeartBeatTimeoutCheck election result: become a leader! {}",currentServer.getServerId());
 
                 // 票数过半成功当选为leader
+                currentServer.setServerStatusEnum(ServerStatusEnum.LEADER);
+                currentServer.setCurrentLeader(currentServer.getServerId());
 
                 // 成为leader之后需要进行的一些操作
                 processWhenBecomeLeader();
-
-                currentServer.setServerStatusEnum(ServerStatusEnum.LEADER);
-                currentServer.setCurrentLeader(currentServer.getServerId());
             }else{
                 // 票数不过半，无法成为leader
                 logger.info("HeartBeatTimeoutCheck election result: not become a leader! {}",currentServer.getServerId());

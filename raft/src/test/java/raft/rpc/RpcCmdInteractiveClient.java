@@ -27,7 +27,7 @@ public class RpcCmdInteractiveClient {
         System.out.println("RpcCmdInteractiveClient start, please input command:");
 
         while(scan.hasNext()) {
-            String input = scan.nextLine().trim();
+            String input = scan.nextLine();
             if(input.length() == 0){
                 continue;
             }

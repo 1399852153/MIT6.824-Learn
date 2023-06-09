@@ -4,6 +4,9 @@ public class InstallSnapshotRpcResult {
 
     private int term;
 
+    public InstallSnapshotRpcResult() {
+    }
+
     public InstallSnapshotRpcResult(int term) {
         this.term = term;
     }

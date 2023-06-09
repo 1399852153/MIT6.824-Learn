@@ -118,8 +118,16 @@ public class LogModule {
 
                 this.lastIndex = randomAccessLogFile.readLong();
             }else{
-                // 之前的日志为空，lastIndex初始化为-1
-                this.lastIndex = -1;
+                // 可能全被压缩掉了，也可能是确实没有日志
+
+                RaftSnapshot raftSnapshot = this.currentServer.getSnapshotModule().readSnapshotMetaData();
+                if(raftSnapshot == null){
+                    // 确实没有日志lastIndex初始化为-1
+                    this.lastIndex = -1;
+                }else{
+                    // 全被压缩了，从快照里获取
+                    this.lastIndex = raftSnapshot.getLastIncludedIndex();
+                }
             }
         }
 
@@ -481,6 +489,9 @@ public class LogModule {
      * */
     public void compressLogBySnapshot(InstallSnapshotRpcParam installSnapshotRpcParam){
         this.lastCommittedIndex = installSnapshotRpcParam.getLastIncludedIndex();
+        if(this.lastIndex < this.lastCommittedIndex){
+            this.lastIndex = this.lastCommittedIndex;
+        }
 
         try {
             buildNewLogFileRemoveCommittedLog();
@@ -494,7 +505,12 @@ public class LogModule {
         if(lastLogEntry != null){
             return lastLogEntry;
         }else {
-            return LogEntry.getEmptyLogEntry();
+            RaftSnapshot raftSnapshot = this.currentServer.getSnapshotModule().readSnapshotMetaData();
+            if(raftSnapshot != null){
+                return LogEntry.getLogEntryBySnapshot(raftSnapshot);
+            }else{
+                return LogEntry.getEmptyLogEntry();
+            }
         }
     }
 
@@ -627,19 +643,18 @@ public class LogModule {
         long lastCommitted = getLastCommittedIndex();
         long lastIndex = getLastIndex();
 
-        File tempLogFile = new File(getLogFileDir() + File.separator + logTempFileName);
-        MyRaftFileUtil.createFile(tempLogFile);
-
         // 暂不考虑读取太多造成内存溢出的问题
         List<LogEntry> logEntryList;
         if(lastCommitted == lastIndex){
-            // 所有日志都提交了，创建一个空的新日志文件
+            // (lastCommitted == lastIndex) 所有日志都提交了，创建一个空的新日志文件
             logEntryList = new ArrayList<>();
         }else{
             // 还有日志没提交，把没提交的记录到新的日志文件中
             logEntryList = readLocalLog(lastCommitted+1,lastIndex);
         }
 
+        File tempLogFile = new File(getLogFileDir() + File.separator + logTempFileName);
+        MyRaftFileUtil.createFile(tempLogFile);
         try(RandomAccessFile randomAccessTempLogFile = new RandomAccessFile(tempLogFile,"rw")) {
 
             long currentOffset = 0;

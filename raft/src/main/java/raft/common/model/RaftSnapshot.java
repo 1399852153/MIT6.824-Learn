@@ -19,7 +19,7 @@ public class RaftSnapshot {
      * 快照数据
      * (注意：暂不考虑快照过大导致byte数组放不下，需要读取多次的情况)
      * */
-    private byte[] snapshotData;
+    private byte[] snapshotData = new byte[0];
 
     public long getLastIncludedIndex() {
         return lastIncludedIndex;

@@ -93,8 +93,9 @@ public class RaftServer implements RaftService {
         this.otherNodeInCluster = otherNodeInCluster;
 
         try {
-            logModule = new LogModule(this);
+            // 日志模块依赖快照模块
             snapshotModule = new SnapshotModule(this);
+            logModule = new LogModule(this);
         } catch (IOException e) {
             throw new MyRaftException("init LogModule error!",e);
         }
@@ -137,7 +138,7 @@ public class RaftServer implements RaftService {
 
     @Override
     public InstallSnapshotRpcResult installSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam) {
-        logger.info("installSnapshot start! serverId={}",this.serverId);
+        logger.info("installSnapshot start! serverId={},installSnapshotRpcParam={}",this.serverId,installSnapshotRpcParam);
 
         if(installSnapshotRpcParam.getTerm() < this.currentTerm){
             // Reply immediately if term < currentTerm

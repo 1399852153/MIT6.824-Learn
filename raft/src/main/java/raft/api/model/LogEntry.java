@@ -1,6 +1,7 @@
 package raft.api.model;
 
 import raft.api.command.Command;
+import raft.common.model.RaftSnapshot;
 
 /**
  * 日志条目
@@ -50,6 +51,14 @@ public class LogEntry {
         LogEntry logEntry = new LogEntry();
         logEntry.setLogTerm(-1);
         logEntry.setLogIndex(-1);
+
+        return logEntry;
+    }
+
+    public static LogEntry getLogEntryBySnapshot(RaftSnapshot raftSnapshot){
+        LogEntry logEntry = new LogEntry();
+        logEntry.setLogTerm(raftSnapshot.getLastIncludedTerm());
+        logEntry.setLogIndex(raftSnapshot.getLastIncludedIndex());
 
         return logEntry;
     }

@@ -89,19 +89,32 @@ public class SnapshotModule {
         }
     }
 
+    /**
+     * 安装快照
+     * 思考一下，follower从leader接受快照和自己本地定时任务生成快照会不会有并发?
+     * 如果存在并发，总共10个block安装了5块，此时触发了定时任务本地生成快照怎么办
+     * */
     public void appendInstallSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam){
         logger.info("do appendInstallSnapshot installSnapshotRpcParam={}",installSnapshotRpcParam);
         writeLock.lock();
 
-        // 直接覆盖当前的快照文件
-        try (RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotFile, "rw")) {
-            if(installSnapshotRpcParam.getOffset() == 0){
-                newSnapshotFile.seek(0);
-                newSnapshotFile.setLength(0);
+        String userPath = getSnapshotFileDir();
 
-                newSnapshotFile.writeInt(installSnapshotRpcParam.getLastIncludedTerm());
-                newSnapshotFile.writeLong(installSnapshotRpcParam.getLastIncludedIndex());
+        // 新的文件名是tempFile
+        String newSnapshotFilePath = userPath + File.separator + snapshotTempFileName;
+        logger.info("do appendInstallSnapshot newSnapshotFilePath={}", newSnapshotFilePath);
+
+        File snapshotTempFile = new File(newSnapshotFilePath);
+        try (RandomAccessFile newSnapshotFile = new RandomAccessFile(snapshotTempFile, "rw")) {
+            MyRaftFileUtil.createFile(snapshotTempFile);
+
+            if(installSnapshotRpcParam.getOffset() == 0){
+                newSnapshotFile.setLength(0);
             }
+
+            newSnapshotFile.seek(0);
+            newSnapshotFile.writeInt(installSnapshotRpcParam.getLastIncludedTerm());
+            newSnapshotFile.writeLong(installSnapshotRpcParam.getLastIncludedIndex());
 
             // 文件指针偏移，找到实际应该写入快照数据的地方
             newSnapshotFile.seek(actualDataOffset + installSnapshotRpcParam.getOffset());
@@ -114,34 +127,41 @@ public class SnapshotModule {
         } finally {
             writeLock.unlock();
         }
+
+        if(installSnapshotRpcParam.isDone()) {
+            writeLock.lock();
+            try {
+                // 先删掉原来的快照文件，然后把临时文件重名名为快照文件(delete后、重命名前可能宕机，但是没关系，重启后构造方法里做了对应处理)
+                snapshotFile.delete();
+                snapshotTempFile.renameTo(snapshotFile);
+            } finally {
+                writeLock.unlock();
+            }
+        }
     }
 
     /**
      * 没有实际快照数据，只有元数据
      * */
     public RaftSnapshot readSnapshotMetaData(){
-        readLock.lock();
-
         if(this.snapshotFile.length() == 0){
             return null;
         }
 
-        try{
-            try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
-                logger.info("do readSnapshotNoData");
+        readLock.lock();
 
-                RaftSnapshot raftSnapshot = new RaftSnapshot();
-                raftSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
-                raftSnapshot.setLastIncludedIndex(latestSnapshotRaFile.readLong());
+        try(RandomAccessFile latestSnapshotRaFile = new RandomAccessFile(this.snapshotFile, "r")) {
+//            logger.info("do readSnapshotNoData");
 
-                logger.info("readSnapshotNoData success! readSnapshotNoData={}",raftSnapshot);
-                return raftSnapshot;
-            } catch (IOException e) {
-                throw new MyRaftException("readSnapshotNoData error",e);
-            } finally {
-                readLock.unlock();
-            }
-        }finally {
+            RaftSnapshot raftSnapshot = new RaftSnapshot();
+            raftSnapshot.setLastIncludedTerm(latestSnapshotRaFile.readInt());
+            raftSnapshot.setLastIncludedIndex(latestSnapshotRaFile.readLong());
+
+//            logger.info("readSnapshotNoData success! readSnapshotNoData={}",raftSnapshot);
+            return raftSnapshot;
+        } catch (IOException e) {
+            throw new MyRaftException("readSnapshotNoData error",e);
+        } finally {
             readLock.unlock();
         }
     }

@@ -28,6 +28,13 @@ public class RpcClientDemo {
             Assert.assertEquals(result, "v2");
         }
 
+        {
+            raftClient.doRequest(new SetCommand("k3", "v3"));
+
+            String result = raftClient.doRequest(new GetCommand("k3"));
+            Assert.assertEquals(result, "v3");
+        }
+
         System.out.println("all finished!");
 
     }

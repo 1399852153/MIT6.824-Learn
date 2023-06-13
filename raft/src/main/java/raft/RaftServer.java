@@ -6,10 +6,10 @@ import org.slf4j.LoggerFactory;
 import raft.api.command.GetCommand;
 import raft.api.command.SetCommand;
 import raft.api.model.*;
+import raft.api.service.RaftService;
 import raft.common.config.RaftConfig;
 import raft.common.config.RaftNodeConfig;
 import raft.common.enums.ServerStatusEnum;
-import raft.api.service.RaftService;
 import raft.common.model.RaftSnapshot;
 import raft.exception.MyRaftException;
 import raft.module.*;
@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class RaftServer implements RaftService {
 
@@ -43,15 +42,9 @@ public class RaftServer implements RaftService {
     private volatile ServerStatusEnum serverStatusEnum;
 
     /**
-     * 当前服务器的任期值
+     * raft服务器元数据(当前任期值currentTerm、当前投票给了谁votedFor)
      * */
-    private volatile int currentTerm;
-
-    /**
-     * 当前服务器在此之前投票给了谁？
-     * (候选者的serverId，如果还没有投递就是null)
-     * */
-    private volatile Integer votedFor;
+    private final RaftServerMetaDataPersistentModule raftServerMetaDataPersistentModule;
 
     /**
      * 当前服务认为的leader节点的Id
@@ -84,8 +77,9 @@ public class RaftServer implements RaftService {
         this.raftConfig = raftConfig;
         // 初始化时都是follower
         this.serverStatusEnum = ServerStatusEnum.FOLLOWER;
-        // 当前任期值为0
-        this.currentTerm = 0;
+
+        // 服务器元数据模块
+        this.raftServerMetaDataPersistentModule = new RaftServerMetaDataPersistentModule(raftConfig.getServerId());
     }
 
     public void init(List<RaftService> otherNodeInCluster){
@@ -140,12 +134,12 @@ public class RaftServer implements RaftService {
     public InstallSnapshotRpcResult installSnapshot(InstallSnapshotRpcParam installSnapshotRpcParam) {
         logger.info("installSnapshot start! serverId={},installSnapshotRpcParam={}",this.serverId,installSnapshotRpcParam);
 
-        if(installSnapshotRpcParam.getTerm() < this.currentTerm){
+        if(installSnapshotRpcParam.getTerm() < this.raftServerMetaDataPersistentModule.getCurrentTerm()){
             // Reply immediately if term < currentTerm
             // 拒绝处理任期低于自己的老leader的请求
 
             logger.info("installSnapshot term < currentTerm");
-            return new InstallSnapshotRpcResult(this.currentTerm);
+            return new InstallSnapshotRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm());
         }
 
         // 安装快照
@@ -165,7 +159,7 @@ public class RaftServer implements RaftService {
 
         logger.info("installSnapshot end! serverId={}",this.serverId);
 
-        return new InstallSnapshotRpcResult(this.currentTerm);
+        return new InstallSnapshotRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm());
     }
 
     @Override
@@ -219,7 +213,7 @@ public class RaftServer implements RaftService {
 
         // 构造新的日志条目
         LogEntry newLogEntry = new LogEntry();
-        newLogEntry.setLogTerm(this.currentTerm);
+        newLogEntry.setLogTerm(this.raftServerMetaDataPersistentModule.getCurrentTerm());
         // 新日志的索引号为当前最大索引编号+1
         newLogEntry.setLogIndex(this.logModule.getLastIndex() + 1);
         newLogEntry.setCommand(clientRequestParam.getCommand());
@@ -269,19 +263,19 @@ public class RaftServer implements RaftService {
     }
 
     private AppendEntriesRpcResult doAppendEntries(AppendEntriesRpcParam appendEntriesRpcParam){
-        if(appendEntriesRpcParam.getTerm() < this.currentTerm){
+        if(appendEntriesRpcParam.getTerm() < this.raftServerMetaDataPersistentModule.getCurrentTerm()){
             // Reply false if term < currentTerm (§5.1)
             // 拒绝处理任期低于自己的老leader的请求
 
             logger.info("doAppendEntries term < currentTerm");
-            return new AppendEntriesRpcResult(this.currentTerm,false);
+            return new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(),false);
         }
 
-        if(appendEntriesRpcParam.getTerm() >= this.currentTerm){
+        if(appendEntriesRpcParam.getTerm() >= this.raftServerMetaDataPersistentModule.getCurrentTerm()){
             // appendEntries请求中任期值如果大于自己，说明已经有一个更新的leader了，自己转为follower，并且以对方更大的任期为准
             this.serverStatusEnum = ServerStatusEnum.FOLLOWER;
             this.currentLeader = appendEntriesRpcParam.getLeaderId();
-            this.currentTerm = appendEntriesRpcParam.getTerm();
+            this.raftServerMetaDataPersistentModule.setCurrentTerm(appendEntriesRpcParam.getTerm());
         }
 
         if(appendEntriesRpcParam.getEntries() == null){
@@ -303,7 +297,7 @@ public class RaftServer implements RaftService {
             }
 
             // 心跳请求，直接返回
-            return new AppendEntriesRpcResult(this.currentTerm,true);
+            return new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(),true);
         }
 
         // logEntries不为空，是真实的日志复制rpc
@@ -332,7 +326,7 @@ public class RaftServer implements RaftService {
 
                 logger.info("doAppendEntries localPrevLogEntry not match, localLogEntry={}",localPrevLogEntry);
 
-                return new AppendEntriesRpcResult(this.currentTerm,false);
+                return new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(),false);
             }
         }
 
@@ -351,12 +345,12 @@ public class RaftServer implements RaftService {
 
             logger.info("doAppendEntries localEntry not exist, append log");
 
-            appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+            appendEntriesRpcResult = new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(), true);
         }else{
             if(localLogEntry.getLogTerm() == newLogEntry.getLogTerm()){
                 logger.info("local log existed and term match. return success");
                 // 本地日志存在，且任期一致,幂等返回成功
-                appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+                appendEntriesRpcResult = new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(), true);
             }else{
                 logger.info("local log existed but term conflict. delete conflict log");
 
@@ -371,7 +365,7 @@ public class RaftServer implements RaftService {
                 logModule.writeLocalLog(newLogEntry);
 
                 // 返回成功
-                appendEntriesRpcResult = new AppendEntriesRpcResult(this.currentTerm, true);
+                appendEntriesRpcResult = new AppendEntriesRpcResult(this.raftServerMetaDataPersistentModule.getCurrentTerm(), true);
             }
         }
 
@@ -427,19 +421,19 @@ public class RaftServer implements RaftService {
     }
 
     public int getCurrentTerm() {
-        return currentTerm;
+        return this.raftServerMetaDataPersistentModule.getCurrentTerm();
     }
 
     public Integer getVotedFor() {
-        return votedFor;
+        return this.raftServerMetaDataPersistentModule.getVotedFor();
     }
 
     public void setCurrentTerm(int currentTerm) {
-        this.currentTerm = currentTerm;
+        this.raftServerMetaDataPersistentModule.setCurrentTerm(currentTerm);
     }
 
     public void setVotedFor(Integer votedFor) {
-        this.votedFor = votedFor;
+        this.raftServerMetaDataPersistentModule.setVotedFor(votedFor);
     }
 
     public Integer getCurrentLeader() {
@@ -492,7 +486,7 @@ public class RaftServer implements RaftService {
      * 清空votedFor
      * */
     public void cleanVotedFor(){
-        this.votedFor = null;
+        this.raftServerMetaDataPersistentModule.setVotedFor(null);
     }
 
     /**
